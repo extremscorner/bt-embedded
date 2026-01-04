@@ -1094,12 +1094,13 @@ static BteL2cap *bte_l2cap_new()
     return l2cap;
 }
 
-void bte_l2cap_new_outgoing(BteHci *hci, const BteBdAddr *address,
+void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
                             BteL2capPsm psm, const BteHciConnectParams *params,
                             BteL2capConnectCb callback, void *userdata)
 {
     BteL2cap *l2cap = bte_l2cap_new();
 
+    BteHci *hci = bte_hci_get(client);
     /* TODO: can we have more than one connection to the same address/psm? If
      * not, we should check for duplicates here... */
     BteAcl *acl = bte_acl_get_for_address(hci, address);

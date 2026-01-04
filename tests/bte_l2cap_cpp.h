@@ -57,11 +57,11 @@ public:
     using ConnectCb = std::function<void(
         std::optional<L2cap> l2cap, const BteL2capConnectionResponse &reply)>;
     static void newOutgoing(
-        Client::Hci &hci, const BteBdAddr &address, BteL2capPsm psm,
+        Client &client, const BteBdAddr &address, BteL2capPsm psm,
         const std::optional<BteHciConnectParams> &params,
         const ConnectCb &cb) {
         auto *f = new ConnectCb(cb);
-        bte_l2cap_new_outgoing(hci.m_hci, &address, psm,
+        bte_l2cap_new_outgoing(client.m_client, &address, psm,
                                params ? &params.value() : nullptr,
                                &L2cap::Callbacks::connect, f);
     }
