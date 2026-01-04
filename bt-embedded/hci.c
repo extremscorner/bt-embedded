@@ -1344,7 +1344,9 @@ void bte_hci_write_scan_enable(BteHci *hci, uint8_t scan_enable,
         hci, HCI_W_SCAN_EN_OCF, HCI_HC_BB_OGF, HCI_W_SCAN_EN_PLEN,
         command_complete_cb, callback, userdata);
     if (UNLIKELY(!b)) return;
-    b->data[HCI_CMD_HDR_LEN] = scan_enable;
+
+    hci->scan_mode = scan_enable;
+    b->data[HCI_CMD_HDR_LEN] = _bte_hci_dev_combined_scan_mode();
     _bte_hci_send_command(b);
 }
 

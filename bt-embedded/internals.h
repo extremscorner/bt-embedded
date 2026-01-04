@@ -210,6 +210,10 @@ struct bte_client_t {
         BteHciPinCodeRequestCb pin_code_request_cb;
         BteHciVendorEventCb vendor_event_cb;
 
+        /* Store the scan modes enabled by this client; the actual HCI request
+         * will take into account the desires of all clients. */
+        uint8_t scan_mode;
+
         /* Storage for temporary data, only valid since issuing an asynchronous
          * command till the time that its corresponding command status event
          * has been received. */
@@ -313,6 +317,8 @@ BteHciEventHandler *_bte_hci_dev_handler_for_event(uint8_t event_code);
 
 void _bte_hci_dev_inquiry_cleanup(void);
 void _bte_hci_dev_stored_keys_cleanup(void);
+
+uint8_t _bte_hci_dev_combined_scan_mode(void);
 
 #ifdef __cplusplus
 }

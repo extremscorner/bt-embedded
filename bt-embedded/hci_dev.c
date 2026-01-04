@@ -492,3 +492,15 @@ void _bte_hci_dev_stored_keys_cleanup(void)
     dev->stored_keys.responses = NULL;
     dev->stored_keys.num_responses = 0;
 }
+
+uint8_t _bte_hci_dev_combined_scan_mode(void)
+{
+    BteHciDev *dev = &_bte_hci_dev;
+    uint8_t scan_mode = 0;
+
+    for (int i = 0; i < BTE_HCI_MAX_CLIENTS; i++) {
+        BteClient *client = dev->clients[i];
+        if (client) scan_mode |= client->hci.scan_mode;
+    }
+    return scan_mode;
+}
