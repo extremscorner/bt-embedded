@@ -1084,7 +1084,7 @@ static void bte_l2cap_free(BteL2cap *l2cap)
     free(l2cap);
 }
 
-BteL2cap *bte_l2cap_new()
+static BteL2cap *bte_l2cap_new()
 {
     BteL2cap *l2cap = malloc(sizeof(BteL2cap));
     memset(l2cap, 0, sizeof(BteL2cap));
