@@ -1147,6 +1147,18 @@ void bte_l2cap_unref(BteL2cap *l2cap)
     }
 }
 
+void bte_l2cap_set_userdata(BteL2cap *l2cap, void *userdata)
+{
+    assert(l2cap != NULL);
+    l2cap->userdata = userdata;
+}
+
+void *bte_l2cap_get_userdata(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return l2cap->userdata;
+}
+
 void bte_l2cap_configure(
     BteL2cap *l2cap, const BteL2capConfigureParams *params,
     BteL2capConfigureCb callback, void *userdata)
