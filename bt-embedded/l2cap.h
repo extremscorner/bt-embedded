@@ -67,6 +67,28 @@ BteConnHandle bte_l2cap_get_connection_handle(BteL2cap *l2cap);
 BteClient *bte_l2cap_get_client(BteL2cap *l2cap);
 BteHci *bte_l2cap_get_hci(BteL2cap *l2cap);
 
+typedef enum {
+    BTE_L2CAP_CLOSED = 0,
+    BTE_L2CAP_WAIT_CONNECT,
+    BTE_L2CAP_WAIT_CONNECT_RSP,
+    BTE_L2CAP_WAIT_CONFIG,
+    BTE_L2CAP_CONFIG_FIRST = BTE_L2CAP_WAIT_CONFIG,
+    BTE_L2CAP_WAIT_SEND_CONFIG,
+    BTE_L2CAP_WAIT_CONFIG_REQ_RSP,
+    BTE_L2CAP_WAIT_CONFIG_RSP,
+    BTE_L2CAP_WAIT_CONFIG_REQ,
+    BTE_L2CAP_CONFIG_LAST = BTE_L2CAP_WAIT_CONFIG_REQ,
+    BTE_L2CAP_OPEN,
+    BTE_L2CAP_WAIT_DISCONNECT,
+} BteL2capState;
+
+BteL2capState bte_l2cap_get_state(BteL2cap *l2cap);
+
+typedef void (*BteL2capStateChangedCb)(BteL2cap *l2cap, BteL2capState state,
+                                       void *userdata);
+void bte_l2cap_on_state_changed(BteL2cap *l2cap,
+                                BteL2capStateChangedCb callback);
+
 typedef struct {
     uint8_t flags;
     uint8_t service_type;

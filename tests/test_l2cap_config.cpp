@@ -138,7 +138,12 @@ TEST_F(TestL2capConfig, testOutgoingEmpty) {
     m_l2cap->configure(params, [&](const L::ConfigureReply &r) {
         replies.push_back(r);
     });
+    BteL2capState state = m_l2cap->state();
+    m_l2cap->onStateChanged([&](BteL2capState s) {
+        state = s;
+    });
 
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
     uint8_t reqId = m_cmdId++;
     Buffer expectedData = makeRequest({}, reqId);
     ASSERT_EQ(m_backend.lastData(), expectedData);
@@ -151,6 +156,7 @@ TEST_F(TestL2capConfig, testOutgoingEmpty) {
         {},
     };
     ASSERT_EQ(replies, expectedReplies);
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ);
 }
 
 TEST_F(TestL2capConfig, testOutgoingSingleFields) {
@@ -290,6 +296,12 @@ TEST_F(TestL2capConfig, testFragmentation) {
         replies.push_back(r);
     });
 
+    BteL2capState state = m_l2cap->state();
+    m_l2cap->onStateChanged([&](BteL2capState s) {
+        state = s;
+    });
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
+
     uint8_t reqId0 = m_cmdId++;
     uint8_t reqId1 = m_cmdId++;
     uint8_t qosSize = 2 + 5 * 4;
@@ -329,6 +341,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
      * first, send an ack reply to the first packet: */
     peerResponds({}, reqId0, L2CAP_CONFIG_RES_OK, true);
     bte_handle_events();
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
 
     /* Then send a couple of rejected parameters */
     Buffer configRej {
@@ -340,6 +353,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
     };
     peerResponds(configRej, reqId1, L2CAP_CONFIG_RES_ERR_PARAMS, true);
     bte_handle_events();
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
 
     /* At this point we should have sent another null-option packet to prompt
      * the peer to continue sending the configuration response */
@@ -361,6 +375,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
     };
     peerResponds(configOk, reqId2);
     bte_handle_events();
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ);
 
     L::ConfigureParams expectedParams;
     expectedParams.setMtu(0x2301);
@@ -532,6 +547,12 @@ TEST_F(TestL2capConfig, testIncomingWithLongerResponse) {
         m_l2cap->setConfigureReply(reply);
     });
 
+    BteL2capState state = m_l2cap->state();
+    m_l2cap->onStateChanged([&](BteL2capState s) {
+        state = s;
+    });
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG);
+
     uint8_t reqId = 42;
     /* Send a request with a couple of parameters */
     uint8_t qosSize = 2 + 5 * 4;
@@ -587,6 +608,7 @@ TEST_F(TestL2capConfig, testIncomingWithLongerResponse) {
         makeResponse(config1, reqId2, L2CAP_CONFIG_RES_ERR_REJ, false),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG);
 }
 
 TEST_F(TestL2capConfig, testConfigureMoreData) {
@@ -615,4 +637,79 @@ TEST_F(TestL2capConfig, testConfigureMoreData) {
         0x00, 0x00, /* result (success) */
         });
     bte_handle_events();
+}
+
+TEST_F(TestL2capConfig, testStateInitiatiorFirst) {
+    using L = Bte::L2cap;
+    L::ConfigureParams params;
+    m_l2cap->configure(params, [&](const L::ConfigureReply &r) {});
+    m_l2cap->onConfigureRequest([&](const L::ConfigureParams &params) {
+        L::ConfigureReply reply = {
+            0, /* rejected */
+            0, /* unknown */
+            params,
+        };
+        m_l2cap->setConfigureReply(reply);
+    });
+
+    BteL2capState state = m_l2cap->state();
+    m_l2cap->onStateChanged([&](BteL2capState s) {
+        state = s;
+    });
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
+
+    uint8_t reqId = m_cmdId++;
+    Buffer expectedData = makeRequest({}, reqId);
+    ASSERT_EQ(m_backend.lastData(), expectedData);
+
+    /* Send an empty reply */
+    peerResponds(Buffer(), reqId);
+    bte_handle_events();
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ);
+
+    uint8_t incomingReqId = 56;
+    /* Send an empty request */
+    sendRequest({}, incomingReqId);
+    bte_handle_events();
+
+    /* Check that our reply was sent */
+    expectedData = makeResponse({}, incomingReqId);
+    ASSERT_EQ(m_backend.lastData(), expectedData);
+    ASSERT_EQ(state, BTE_L2CAP_OPEN);
+}
+
+TEST_F(TestL2capConfig, testStateAcceptorFirst) {
+    using L = Bte::L2cap;
+    m_l2cap->onConfigureRequest([&](const L::ConfigureParams &params) {
+        L::ConfigureReply reply = {
+            0, /* rejected */
+            0, /* unknown */
+            params,
+        };
+        m_l2cap->setConfigureReply(reply);
+    });
+
+    BteL2capState state = m_l2cap->state();
+    m_l2cap->onStateChanged([&](BteL2capState s) {
+        state = s;
+    });
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG);
+
+    uint8_t incomingReqId = 56;
+    /* Send an empty request */
+    sendRequest({}, incomingReqId);
+    bte_handle_events();
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_SEND_CONFIG);
+
+    L::ConfigureParams params;
+    m_l2cap->configure(params, [&](const L::ConfigureReply &r) {});
+    uint8_t reqId = m_cmdId++;
+    Buffer expectedData = makeRequest({}, reqId);
+    ASSERT_EQ(m_backend.lastData(), expectedData);
+    ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_RSP);
+
+    /* Send an empty reply */
+    peerResponds(Buffer(), reqId);
+    bte_handle_events();
+    ASSERT_EQ(state, BTE_L2CAP_OPEN);
 }

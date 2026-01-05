@@ -87,6 +87,9 @@ struct bte_l2cap_t {
     /* All expected responses must have the same code, and progressive Ids */
     uint8_t expected_response_count;
 
+    BteL2capState state;
+    BteL2capStateChangedCb state_changed_cb;
+
     BteL2capOnConfigureCb configure_cb;
     void *configure_userdata;
     /* Temporary pointer, only valid while receiving a configuration

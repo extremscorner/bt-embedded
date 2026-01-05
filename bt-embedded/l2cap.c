@@ -66,6 +66,16 @@ static inline uint16_t next_signal_id()
     return ++s_last_signal_id;
 }
 
+static void l2cap_set_state(BteL2cap *l2cap, BteL2capState state)
+{
+    if (state == l2cap->state) return;
+
+    BTE_DEBUG("%s:%d state is now %d\n", __func__, __LINE__, state);
+    l2cap->state = state;
+    if (l2cap->state_changed_cb)
+        l2cap->state_changed_cb(l2cap, state, l2cap->userdata);
+}
+
 static const BteHciConnectParams *default_connect_params(BteHci *hci)
 {
     /* Taken from libogc */
@@ -177,7 +187,9 @@ static bool l2cap_connection_request(BteL2cap *l2cap)
                                      data, sizeof(data));
     if (UNLIKELY(!buffer)) return false;
 
-    return bte_acl_send_message(l2cap->acl, buffer) >= 0;
+    bool ok = bte_acl_send_message(l2cap->acl, buffer) >= 0;
+    if (ok) l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONNECT_RSP);
+    return ok;
 }
 
 static void acl_l2cap_connected_cb(BteL2cap *l2cap, uint8_t status)
@@ -243,11 +255,15 @@ static bool l2cap_connect_cb(BteL2cap *l2cap, BteBufferReader *reader,
         l2cap_param = NULL;
         reply.remote_channel_id = reply.local_channel_id = 0;
         reply.status = BTE_L2CAP_CONN_RESP_STATUS_NO_INFO;
+        l2cap_set_state(l2cap, BTE_L2CAP_CLOSED);
     } else {
         l2cap_param = l2cap;
         reply.remote_channel_id = le16toh(data[0]);
         reply.local_channel_id = le16toh(data[1]);
         reply.status = le16toh(data[3]);
+        if (reply.result == BTE_L2CAP_CONN_RESP_RES_OK) {
+            l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG);
+        }
 
         l2cap->remote_channel_id = reply.remote_channel_id;
         if (UNLIKELY(reply.local_channel_id != l2cap->local_channel_id)) {
@@ -641,6 +657,24 @@ static bool l2cap_config_send(BteL2cap *l2cap, L2capConfigureData *conf,
         start_cmd = new_start_cmd;
     } while (start_cmd > 0);
 
+    if (!conf->has_pending_packets) {
+        if (code == L2CAP_SIGNAL_CONFIG_REQ) {
+            if (l2cap->state == BTE_L2CAP_WAIT_CONFIG ||
+                l2cap->state == BTE_L2CAP_OPEN) {
+                l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
+            } else if (l2cap->state == BTE_L2CAP_WAIT_SEND_CONFIG) {
+                l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG_RSP);
+            }
+        } else if (result == L2CAP_CONFIG_RES_OK) { /* Response */
+            if (l2cap->state == BTE_L2CAP_WAIT_CONFIG) {
+                l2cap_set_state(l2cap, BTE_L2CAP_WAIT_SEND_CONFIG);
+            } else if (l2cap->state == BTE_L2CAP_WAIT_CONFIG_REQ_RSP) {
+                l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG_RSP);
+            } else if (l2cap->state == BTE_L2CAP_WAIT_CONFIG_REQ) {
+                l2cap_set_state(l2cap, BTE_L2CAP_OPEN);
+            }
+        }
+    }
     return ok;
 }
 
@@ -720,6 +754,14 @@ static bool l2cap_handle_config_resp(BteL2cap *l2cap, BteBufferReader *reader,
                 free(l2cap->configure_resp);
             }
             l2cap->configure_resp = NULL;
+        }
+
+        if (result == L2CAP_CONFIG_RES_OK) {
+            if (l2cap->state == BTE_L2CAP_WAIT_CONFIG_RSP) {
+                l2cap_set_state(l2cap, BTE_L2CAP_OPEN);
+            } else if (l2cap->state == BTE_L2CAP_WAIT_CONFIG_REQ_RSP) {
+                l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG_REQ);
+            }
         }
     } else if (l2cap->expected_response_count == 1) {
         /* If this was supposed to be the last response packet, but it has the
@@ -844,7 +886,11 @@ static bool acl_l2cap_handle_configure_req(
         }
     }
 
-    if (UNLIKELY(!l2cap)) {
+    if (UNLIKELY(!l2cap ||
+                 (l2cap->state != BTE_L2CAP_WAIT_CONFIG &&
+                  l2cap->state != BTE_L2CAP_WAIT_CONFIG_REQ &&
+                  l2cap->state != BTE_L2CAP_WAIT_CONFIG_REQ_RSP &&
+                  l2cap->state != BTE_L2CAP_OPEN))) {
         l2cap_reject_command_invalid_cid(acl_l2cap, id, channel_id,
                                          BTE_L2CAP_CHANNEL_ID_NULL);
         return true;
@@ -945,10 +991,15 @@ static bool l2cap_handle_response(BteL2cap *l2cap, uint8_t code,
     bool ok = false;
     switch (code) {
     case L2CAP_SIGNAL_CONN_RSP:
-        ok = l2cap_connect_cb(l2cap, reader, resp_len);
+        if (l2cap->state == BTE_L2CAP_WAIT_CONNECT_RSP) {
+            ok = l2cap_connect_cb(l2cap, reader, resp_len);
+        }
         break;
     case L2CAP_SIGNAL_CONFIG_RSP:
-        ok = l2cap_handle_config_resp(l2cap, reader, resp_len);
+        if (l2cap->state == BTE_L2CAP_WAIT_CONFIG_RSP ||
+            l2cap->state == BTE_L2CAP_WAIT_CONFIG_REQ_RSP) {
+            ok = l2cap_handle_config_resp(l2cap, reader, resp_len);
+        }
         break;
     /* TODO */
     }
@@ -1091,6 +1142,7 @@ static BteL2cap *bte_l2cap_new()
     l2cap->ref_count = 1;
     l2cap->mtu = L2CAP_MTU_DEFAULT;
     l2cap->remote_mtu = L2CAP_MTU_MIN;
+    l2cap->state = BTE_L2CAP_CLOSED;
     return l2cap;
 }
 
@@ -1159,10 +1211,33 @@ void *bte_l2cap_get_userdata(BteL2cap *l2cap)
     return l2cap->userdata;
 }
 
+BteL2capState bte_l2cap_get_state(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return l2cap->state;
+}
+
+void bte_l2cap_on_state_changed(BteL2cap *l2cap,
+                                BteL2capStateChangedCb callback)
+{
+    assert(l2cap != NULL);
+    l2cap->state_changed_cb = callback;
+}
+
 void bte_l2cap_configure(
     BteL2cap *l2cap, const BteL2capConfigureParams *params,
     BteL2capConfigureCb callback, void *userdata)
 {
+    if (UNLIKELY(l2cap->state != BTE_L2CAP_WAIT_CONFIG &&
+                 l2cap->state != BTE_L2CAP_WAIT_SEND_CONFIG &&
+                 l2cap->state != BTE_L2CAP_OPEN)) {
+        /*  Invalid state for a configure request */
+        BteL2capConfigureReply reply;
+        reply.rejected_mask = 0xffffffff;
+        callback(l2cap, &reply, userdata);
+        return;
+    }
+
     if (UNLIKELY(l2cap->expected_response_count > 0)) {
         /* Must first wait for a reply to the last command */
         BteL2capConfigureReply reply;

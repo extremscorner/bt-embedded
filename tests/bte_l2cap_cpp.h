@@ -69,6 +69,18 @@ public:
     L2cap(const L2cap &other): m_l2cap(bte_l2cap_ref(other.m_l2cap)) {}
     ~L2cap() { bte_l2cap_unref(m_l2cap); }
 
+    BteL2capState state() const {
+        return bte_l2cap_get_state(m_l2cap);
+    }
+
+    using StateChangedCb = std::function<void(BteL2capState state)>;
+    void onStateChanged(const StateChangedCb &cb)
+    {
+        m_onStateChanged = cb;
+        bte_l2cap_set_userdata(m_l2cap, this);
+        bte_l2cap_on_state_changed(m_l2cap, &L2cap::Callbacks::onStateChanged);
+    }
+
     struct ConfigureParams {
         ConfigureParams(): p{0} {}
         ConfigureParams(const BteL2capConfigureParams &params): p(params) {
@@ -221,6 +233,13 @@ private:
     L2cap(BteL2cap *l2cap): m_l2cap(l2cap) {}
 
     struct Callbacks {
+        static void onStateChanged(
+            BteL2cap *l2cap, BteL2capState state, void *d) {
+            L2cap *_this = static_cast<L2cap*>(d);
+            if (_this->m_onStateChanged)
+                _this->m_onStateChanged(state);
+        }
+
         static void connect(BteL2cap *l2cap,
                             const BteL2capConnectionResponse *reply,
                             void *userdata) {
@@ -252,6 +271,7 @@ private:
 
     BteL2cap *m_l2cap;
     ConfigureRequestCb m_onConfigureRequest;
+    StateChangedCb m_onStateChanged;
 };
 
 } // namespace Bte
