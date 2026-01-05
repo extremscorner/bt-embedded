@@ -1094,6 +1094,14 @@ static BteL2cap *bte_l2cap_new()
     return l2cap;
 }
 
+static void l2cap_setup_acl(BteAcl *acl)
+{
+    acl->connected_cb = acl_connected_cb;
+    acl->data_received_cb = acl_data_received_cb;
+    acl->disconnected_cb = acl_disconnected_cb;
+    /* TODO: set the other signal handlers too */
+}
+
 void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
                             BteL2capPsm psm, const BteHciConnectParams *params,
                             BteL2capConnectCb callback, void *userdata)
@@ -1108,11 +1116,8 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
         l2cap->acl = bte_acl_ref(acl);
     } else {
         acl = bte_acl_new(hci, address, sizeof(BteAclL2cap));
+        l2cap_setup_acl(acl);
         l2cap->acl = acl;
-        acl->connected_cb = acl_connected_cb;
-        acl->data_received_cb = acl_data_received_cb;
-        acl->disconnected_cb = acl_disconnected_cb;
-        /* TODO: set the other signal handlers too */
         if (!params) params = default_connect_params(hci);
         bte_acl_connect(acl, params);
     }
