@@ -4,6 +4,7 @@
 #include "bte_cpp.h"
 
 #include "bt-embedded/l2cap.h"
+#include "bt-embedded/l2cap_server.h"
 
 #include <functional>
 #include <iomanip>
@@ -52,6 +53,8 @@ class TestL2capConfig;
 
 namespace Bte {
 
+class L2capServer;
+
 class L2cap {
 public:
     using ConnectCb = std::function<void(
@@ -68,6 +71,14 @@ public:
 
     L2cap(const L2cap &other): m_l2cap(bte_l2cap_ref(other.m_l2cap)) {}
     ~L2cap() { bte_l2cap_unref(m_l2cap); }
+
+    BteConnHandle connectionHandle() const {
+        return bte_l2cap_get_connection_handle(m_l2cap);
+    }
+
+    BteL2capPsm psm() const {
+        return bte_l2cap_get_psm(m_l2cap);
+    }
 
     BteL2capState state() const {
         return bte_l2cap_get_state(m_l2cap);
@@ -230,6 +241,7 @@ public:
 
 private:
     friend class ::TestL2capConfig;
+    friend class L2capServer;
     L2cap(BteL2cap *l2cap): m_l2cap(l2cap) {}
 
     struct Callbacks {
@@ -272,6 +284,37 @@ private:
     BteL2cap *m_l2cap;
     ConfigureRequestCb m_onConfigureRequest;
     StateChangedCb m_onStateChanged;
+};
+
+class L2capServer
+{
+public:
+    L2capServer(Client &client, BteL2capPsm psm):
+        m_server(bte_l2cap_server_new(client.m_client, psm)) {}
+    L2capServer(const L2capServer &other):
+        m_server(bte_l2cap_server_ref(other.m_server)) {}
+    ~L2capServer() { bte_l2cap_server_unref(m_server); }
+
+    using ConnectedCb = std::function<void(L2cap &l2cap)>;
+    void onConnected(const ConnectedCb &cb)
+    {
+        m_onConnected = cb;
+        bte_l2cap_server_on_connected(
+            m_server, &L2capServer::Callbacks::onConnected, this);
+    }
+
+private:
+    struct Callbacks {
+        static void onConnected(BteL2capServer *l2cap_server, BteL2cap *l2cap,
+                                void *d) {
+            L2capServer *_this = static_cast<L2capServer*>(d);
+            L2cap l2cap_cpp(bte_l2cap_ref(l2cap));
+            if (_this->m_onConnected)
+                _this->m_onConnected(l2cap_cpp);
+        }
+    };
+    BteL2capServer *m_server;
+    ConnectedCb m_onConnected;
 };
 
 } // namespace Bte

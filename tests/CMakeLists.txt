@@ -15,6 +15,7 @@ set(BTE_SOURCES
     ${SRC}/hci.c
     ${SRC}/hci_dev.c
     ${SRC}/l2cap.c
+    ${SRC}/l2cap_server.c
 )
 
 add_executable(test_commands
@@ -29,6 +30,7 @@ add_executable(test_commands
     test_hci_dev.cpp
     test_l2cap_config.cpp
     test_l2cap_connect.cpp
+    test_l2cap_server.cpp
 )
 target_link_libraries(test_commands
     bt-embedded

@@ -37,6 +37,9 @@ struct bte_acl_t {
 
 BteAcl *bte_acl_new(BteHci *hci, const BteBdAddr *address,
                     size_t struct_size);
+BteAcl *bte_acl_new_connected(BteHci *hci,
+                              const BteHciAcceptConnectionReply *reply,
+                              size_t struct_size);
 BteAcl *bte_acl_get_for_address(BteHci *hci, const BteBdAddr *address);
 
 BteAcl *bte_acl_ref(BteAcl *acl);

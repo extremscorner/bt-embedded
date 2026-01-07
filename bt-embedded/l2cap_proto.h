@@ -14,6 +14,8 @@ extern "C" {
 #define L2CAP_HDR_LEN 4
 #define L2CAP_SIGNAL_HDR_LEN 4
 
+#define L2CAP_CONN_REQ_LEN 4
+
 #define L2CAP_CONFIG_REQ_HDR_LEN 4
 #define L2CAP_CONFIG_RSP_HDR_LEN 6
 

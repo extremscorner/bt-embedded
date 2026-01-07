@@ -104,6 +104,9 @@ struct bte_l2cap_t {
         struct _bte_l2cap_tmpdata_connect {
             BteL2capConnectCb client_cb;
         } connect;
+        struct _bte_l2cap_tmpdata_connection_req {
+            BteL2capConnectionRequestCb client_cb;
+        } connection_req;
         struct _bte_l2cap_tmpdata_configure {
             BteL2capConfigureCb client_cb;
             void *userdata;

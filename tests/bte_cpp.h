@@ -57,6 +57,7 @@ public:
 };
 
 class L2cap;
+class L2capServer;
 
 class Client {
 public:
@@ -605,6 +606,7 @@ public:
 
     private:
         friend class L2cap;
+        friend class L2capServer;
         std::unordered_map<Tag, std::any> m_callbacks;
 
         struct Callbacks {
@@ -732,6 +734,7 @@ private:
 
     friend class Hci;
     friend class L2cap;
+    friend class L2capServer;
     BteClient *m_client;
     Hci m_hci;
 };

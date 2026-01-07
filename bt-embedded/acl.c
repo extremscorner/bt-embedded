@@ -179,6 +179,28 @@ BteAcl *bte_acl_new(BteHci *hci, const BteBdAddr *address,
     return acl;
 }
 
+BteAcl *bte_acl_new_connected(
+    BteHci *hci, const BteHciAcceptConnectionReply *reply, size_t struct_size)
+{
+    BteAcl *acl = malloc(struct_size);
+    memset(acl, 0, struct_size);
+    acl->ref_count = 1;
+    acl->hci = hci;
+    acl->address = reply->address;
+    acl->conn_handle = reply->conn_handle;
+    if (UNLIKELY(!bte_acl_make_public(acl))) {
+        bte_acl_free(acl);
+        return NULL;
+    }
+
+    /* We don't want to let the hci get destroyed while we are using it, so
+     * let's keep a reference to the client. */
+    bte_client_ref(bte_hci_get_client(hci));
+    bte_hci_on_disconnection_complete(hci, on_disconnection_complete);
+    bte_hci_on_nr_of_completed_packets(hci, on_nr_of_completed_packets);
+    return acl;
+}
+
 BteAcl *bte_acl_get_for_address(BteHci *, const BteBdAddr *address)
 {
     BteHciDev *dev = &_bte_hci_dev;

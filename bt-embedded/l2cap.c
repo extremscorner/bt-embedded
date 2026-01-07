@@ -230,6 +230,20 @@ static void l2cap_reject_command_invalid_cid(
     acl_l2cap_cmd_reply(acl_l2cap, L2CAP_SIGNAL_CMD_REJ, id, data, sizeof(data));
 }
 
+static void l2cap_connection_req_reply(
+    BteAclL2cap *acl_l2cap, uint8_t id,
+    BteL2capChannelId channel_id, BteL2capChannelId remote_channel_id,
+    uint16_t result)
+{
+    uint16_t data[4];
+    data[0] = htole16(channel_id);
+    data[1] = htole16(remote_channel_id);
+    data[2] = htole16(result);
+    data[3] = htole16(BTE_L2CAP_CONN_RESP_STATUS_NO_INFO);
+    acl_l2cap_cmd_reply(acl_l2cap, L2CAP_SIGNAL_CONN_RSP, id,
+                        data, sizeof(data));
+}
+
 static bool l2cap_connect_cb(BteL2cap *l2cap, BteBufferReader *reader,
                              uint16_t resp_len)
 {
@@ -860,6 +874,48 @@ static void l2cap_config_apply(BteL2cap *l2cap,
     /* TODO: handle the other parameters */
 }
 
+static bool acl_l2cap_handle_connection_req(
+    BteAclL2cap *acl_l2cap, uint8_t id,
+    BteBufferReader *reader, uint16_t req_len)
+{
+    if (UNLIKELY(req_len < L2CAP_CONN_REQ_LEN)) return false;
+
+    uint16_t header[2];
+    uint16_t len = bte_buffer_reader_read(reader, header, sizeof(header));
+    if (UNLIKELY(len != sizeof(header))) return false;
+
+    BteL2capPsm psm = le16toh(header[0]);
+    BteL2capChannelId channel_id = le16toh(header[1]);
+
+    BteL2cap *l2cap = NULL;
+    for (int i = 0; i < BTE_ACL_MAX_CLIENTS; i++) {
+        BteL2cap *client = acl_l2cap->clients[i];
+        if (!client || client->state != BTE_L2CAP_CLOSED ||
+            client->local_channel_id != BTE_L2CAP_CHANNEL_ID_NULL) continue;
+
+        BteL2capConnectionRequestCb cb =
+            client->last_async_cmd_data.connection_req.client_cb;
+        if (cb && cb(client, psm, client->userdata)) {
+            l2cap = client;
+            break;
+        }
+    }
+
+    if (UNLIKELY(!l2cap)) {
+        l2cap_connection_req_reply(acl_l2cap, id, BTE_L2CAP_CHANNEL_ID_NULL,
+                                   channel_id, BTE_L2CAP_CONN_RESP_RES_ERR_PSM);
+        return true;
+    }
+
+    l2cap->local_channel_id = next_local_channel_id();
+    l2cap->remote_channel_id = channel_id;
+    l2cap->psm = psm;
+    l2cap_connection_req_reply(acl_l2cap, id, l2cap->local_channel_id,
+                               channel_id, BTE_L2CAP_CONN_RESP_RES_OK);
+    l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG);
+    return true;
+}
+
 static bool acl_l2cap_handle_configure_req(
     BteAclL2cap *acl_l2cap, uint8_t id,
     BteBufferReader *reader, uint16_t req_len)
@@ -977,6 +1033,9 @@ static bool acl_l2cap_handle_request(
 {
     bool ok = false;
     switch (code) {
+    case L2CAP_SIGNAL_CONN_REQ:
+        ok = acl_l2cap_handle_connection_req(acl_l2cap, id, reader, req_len);
+        break;
     case L2CAP_SIGNAL_CONFIG_REQ:
         ok = acl_l2cap_handle_configure_req(acl_l2cap, id, reader, req_len);
         break;
@@ -1185,6 +1244,27 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
     l2cap->last_async_cmd_data.connect.client_cb = callback;
 }
 
+BteL2cap *bte_l2cap_new_connected(BteClient *client,
+                                  const BteHciAcceptConnectionReply *conn_reply,
+                                  BteL2capConnectionRequestCb callback,
+                                  void *userdata)
+{
+    BteL2cap *l2cap = bte_l2cap_new();
+
+    BteHci *hci = bte_hci_get(client);
+    BteAcl *acl = bte_acl_new_connected(hci, conn_reply, sizeof(BteAclL2cap));
+    l2cap_setup_acl(acl);
+    l2cap->acl = acl;
+
+    if (UNLIKELY(!acl_l2cap_add_client(L(acl), l2cap))) {
+        bte_l2cap_unref(l2cap);
+        return NULL;
+    }
+
+    l2cap->userdata = userdata;
+    l2cap->last_async_cmd_data.connection_req.client_cb = callback;
+    return l2cap;
+}
 
 BteL2cap *bte_l2cap_ref(BteL2cap *l2cap)
 {
@@ -1209,6 +1289,18 @@ void *bte_l2cap_get_userdata(BteL2cap *l2cap)
 {
     assert(l2cap != NULL);
     return l2cap->userdata;
+}
+
+BteConnHandle bte_l2cap_get_connection_handle(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return l2cap->acl->conn_handle;
+}
+
+BteL2capPsm bte_l2cap_get_psm(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return l2cap->psm;
 }
 
 BteL2capState bte_l2cap_get_state(BteL2cap *l2cap)
