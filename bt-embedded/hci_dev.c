@@ -104,7 +104,9 @@ static void deliver_status_to_client(BteBuffer *buffer)
 
         BteHciReply reply;
         reply.status = status;
-        client_cb(hci, &reply, userdata);
+        if (client_cb) {
+            client_cb(hci, &reply, userdata);
+        }
     }
 }
 
