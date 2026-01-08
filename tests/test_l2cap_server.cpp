@@ -153,6 +153,23 @@ protected:
     std::set<BteConnHandle> m_connections;
 };
 
+TEST_F(TestL2capServer, testGetters)
+{
+    BteClient *client = bte_client_new();
+    BteL2capServer *server = bte_l2cap_server_new(client, BTE_L2CAP_PSM_SDP);
+    ASSERT_TRUE(server != nullptr);
+
+    BteL2capServer *s2 = bte_l2cap_server_ref(server);
+    ASSERT_EQ(s2, server);
+    bte_l2cap_server_unref(s2);
+
+    ASSERT_EQ(bte_l2cap_server_get_client(server), client);
+    ASSERT_EQ(bte_l2cap_server_get_hci(server), bte_hci_get(client));
+
+    bte_l2cap_server_unref(server);
+    bte_client_unref(client);
+}
+
 TEST_F(TestL2capServer, testOneOk)
 {
     Bte::L2capServer server(m_client, BTE_L2CAP_PSM_SDP);
