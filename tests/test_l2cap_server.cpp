@@ -23,9 +23,10 @@ protected:
     {
         m_backend.clear();
         dummy_driver_set_acl_limits(600, 2);
-        setLocalCid(0x0040);
+        m_localCid = 0x0040;
         setRemoteCid(0x0040);
         m_cmdId = 1;
+        m_client.reset(new Bte::Client());
     }
 
     void TearDown() override
@@ -35,11 +36,7 @@ protected:
             sendHciDisconnectionComplete(*m_connections.begin());
         }
         bte_handle_events();
-    }
-
-    void setLocalCid(BteL2capChannelId cid)
-    {
-        m_localCid = cid;
+        m_client.reset();
     }
 
     void setRemoteCid(BteL2capChannelId cid)
@@ -61,6 +58,12 @@ protected:
         uint8_t reqId, uint16_t result = BTE_L2CAP_CONN_RESP_RES_OK,
         uint16_t status = BTE_L2CAP_CONN_RESP_STATUS_NO_INFO)
     {
+        BteL2capChannelId localCid = m_localCid;
+        if (result == BTE_L2CAP_CONN_RESP_RES_OK) {
+            m_localCid++;
+        } else {
+            localCid = BTE_L2CAP_CHANNEL_ID_NULL;
+        }
         return Buffer{
             low(m_connHandle), uint8_t(0x20 | high(m_connHandle)),
             16, 0, /* Total length */
@@ -69,7 +72,7 @@ protected:
             L2CAP_SIGNAL_CONN_RSP,
             reqId,
             8, 0, /* command length */
-            low(m_localCid), high(m_localCid), /* source CID */
+            low(localCid), high(localCid), /* source CID */
             low(m_remoteCid), high(m_remoteCid), /* dest CID */
             low(result), high(result),
             low(status), high(status),
@@ -87,7 +90,7 @@ protected:
             reqId,
             4, 0, /* cmd length */
             low(psm), high(psm),
-            low(m_localCid), high(m_localCid), /* source CID */
+            low(m_remoteCid), high(m_remoteCid), /* source CID */
         };
     }
 
@@ -145,7 +148,7 @@ protected:
     }
 
     MockBackend m_backend;
-    Bte::Client m_client;
+    std::unique_ptr<Bte::Client> m_client;
     BteConnHandle m_connHandle;
     BteL2capChannelId m_localCid;
     BteL2capChannelId m_remoteCid;
@@ -172,7 +175,7 @@ TEST_F(TestL2capServer, testGetters)
 
 TEST_F(TestL2capServer, testOneOk)
 {
-    Bte::L2capServer server(m_client, BTE_L2CAP_PSM_SDP);
+    Bte::L2capServer server(*m_client, BTE_L2CAP_PSM_SDP);
     std::vector<Bte::L2cap> receivedConnections;
     server.onConnected(
         [&](Bte::L2cap &l2cap) { receivedConnections.push_back(l2cap); });
@@ -183,6 +186,8 @@ TEST_F(TestL2capServer, testOneOk)
     };
     ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
     m_backend.clear();
+
+    m_backend.sendEvent({HCI_COMMAND_COMPLETE, 4, 1, 0x1a, 0xc, 0});
 
     /* Send an incoming connection */
     BteBdAddr address = {1, 2, 3, 4, 5, 6};
@@ -230,10 +235,12 @@ TEST_F(TestL2capServer, testOneOk)
 
 TEST_F(TestL2capServer, testUnsupportedPsm)
 {
-    Bte::L2capServer server(m_client, BTE_L2CAP_PSM_SDP);
+    Bte::L2capServer server(*m_client, BTE_L2CAP_PSM_SDP);
     std::vector<Bte::L2cap> receivedConnections;
     server.onConnected(
         [&](Bte::L2cap &l2cap) { receivedConnections.push_back(l2cap); });
+
+    m_backend.sendEvent({HCI_COMMAND_COMPLETE, 4, 1, 0x1a, 0xc, 0});
 
     /* Send an incoming connection */
     BteBdAddr address = {1, 2, 3, 4, 5, 6};
@@ -253,11 +260,96 @@ TEST_F(TestL2capServer, testUnsupportedPsm)
     bte_handle_events();
 
     /* Verify that we refused the request */
-    m_localCid = BTE_L2CAP_CHANNEL_ID_NULL;
     std::vector<Buffer> expectedData {
         makeConnectionResponse(incomingReqId, BTE_L2CAP_CONN_RESP_RES_ERR_PSM),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
 
     ASSERT_TRUE(receivedConnections.empty());
+}
+
+TEST_F(TestL2capServer, testManyOk)
+{
+    Bte::L2capServer server0(*m_client, BTE_L2CAP_PSM_SDP);
+    m_backend.sendEvent({HCI_COMMAND_COMPLETE, 4, 1, 0x1a, 0xc, 0});
+    Bte::L2capServer server1(*m_client, BTE_L2CAP_PSM_HID_CTRL);
+    m_backend.sendEvent({HCI_COMMAND_COMPLETE, 4, 1, 0x1a, 0xc, 0});
+    Bte::L2capServer server2(*m_client, BTE_L2CAP_PSM_HID_INTR);
+    m_backend.sendEvent({HCI_COMMAND_COMPLETE, 4, 1, 0x1a, 0xc, 0});
+    std::vector<Bte::L2cap> receivedConnections;
+    server0.onConnected(
+        [&](Bte::L2cap &l2cap) { receivedConnections.push_back(l2cap); });
+    server1.onConnected(
+        [&](Bte::L2cap &l2cap) { receivedConnections.push_back(l2cap); });
+    server2.onConnected(
+        [&](Bte::L2cap &l2cap) { receivedConnections.push_back(l2cap); });
+
+    /* Check that the controller is ready to accept connections */
+    std::vector<Buffer> expectedCommands{
+        Buffer{ 0x1a, 0xc, 1, BTE_HCI_SCAN_ENABLE_PAGE },
+    };
+    ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
+    m_backend.clear();
+
+    /* Send an incoming connection */
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    BteClassOfDevice cod = {7, 8, 9};
+    sendHciConnectionReq(address, cod);
+    bte_handle_events();
+
+    /* Verify that the connection was accepted */
+    uint8_t role = BTE_HCI_ROLE_SLAVE;
+    expectedCommands = {
+        Buffer{ 0x9, 0x4, 6 + 1 } + address + Buffer{role},
+    };
+    ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
+
+    /* And that the connection was not yet reported */
+    ASSERT_TRUE(receivedConnections.empty());
+
+    /* Send the connection complete */
+    uint8_t hciStatus = 0;
+    m_backend.sendEvent({HCI_COMMAND_STATUS, 4, hciStatus, 1, 0x9, 0x4});
+    m_connHandle = 0x102;
+    sendHciConnectionComplete(m_connHandle, address);
+    bte_handle_events();
+
+    /* And that the connection was not yet reported */
+    ASSERT_TRUE(receivedConnections.empty());
+
+    /* Send the L2CAP connection request */
+    uint8_t incomingReqId = 56;
+    sendConnectionRequest(incomingReqId, BTE_L2CAP_PSM_HID_INTR);
+    bte_handle_events();
+
+    /* Verify that we accepted the request */
+    std::vector<Buffer> expectedData {
+        makeConnectionResponse(incomingReqId),
+    };
+    ASSERT_EQ(m_backend.sentData(), expectedData);
+    m_backend.clear();
+
+    ASSERT_EQ(receivedConnections.size(), 1);
+    Bte::L2cap l2cap2 = receivedConnections[0];
+    ASSERT_EQ(l2cap2.state(), BTE_L2CAP_WAIT_CONFIG);
+    ASSERT_EQ(l2cap2.psm(), BTE_L2CAP_PSM_HID_INTR);
+    ASSERT_EQ(l2cap2.connectionHandle(), m_connHandle);
+    receivedConnections.clear();
+
+    /* Send another L2CAP request */
+    incomingReqId++;
+    sendConnectionRequest(incomingReqId, BTE_L2CAP_PSM_HID_CTRL);
+    bte_handle_events();
+
+    /* Verify that we accepted the request */
+    expectedData = {
+        makeConnectionResponse(incomingReqId),
+    };
+    ASSERT_EQ(m_backend.sentData(), expectedData);
+
+    ASSERT_EQ(receivedConnections.size(), 1);
+    Bte::L2cap l2cap1 = receivedConnections[0];
+    ASSERT_EQ(l2cap1.state(), BTE_L2CAP_WAIT_CONFIG);
+    ASSERT_EQ(l2cap1.psm(), BTE_L2CAP_PSM_HID_CTRL);
+    ASSERT_EQ(l2cap1.connectionHandle(), m_connHandle);
 }
