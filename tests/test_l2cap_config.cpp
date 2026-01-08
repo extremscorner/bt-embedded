@@ -36,6 +36,7 @@ protected:
             Buffer{HCI_CONNECTION_COMPLETE, eventSize, status, 0x00, 0x01} +
             address + Buffer{link_type, enc_mode});
         bte_handle_events();
+        m_connections.insert(0x0100);
 
         /* Read the L2CAP connection request */
         Buffer conf = m_backend.lastData();
@@ -65,6 +66,20 @@ protected:
     }
 
     void TearDown() override {
+        while (!m_connections.empty()) {
+            sendHciDisconnectionComplete(*m_connections.begin());
+        }
+        bte_handle_events();
+    }
+
+    void sendHciDisconnectionComplete(BteConnHandle handle,
+                                      uint8_t reason = HCI_HOST_TIMEOUT)
+    {
+        const uint8_t eventSize = 1 + 2 + 1;
+        uint8_t status = 0;
+        m_backend.sendEvent({ HCI_DISCONNECTION_COMPLETE, eventSize, status,
+                              low(handle), high(handle), reason });
+        m_connections.erase(handle);
     }
 
     void setRemoteMtu(uint16_t mtu) {
@@ -130,6 +145,7 @@ protected:
     Bte::Client m_client;
     std::unique_ptr<Bte::L2cap> m_l2cap;
     uint8_t m_cmdId;
+    std::set<BteConnHandle> m_connections;
 };
 
 TEST_F(TestL2capConfig, testOutgoingEmpty) {
