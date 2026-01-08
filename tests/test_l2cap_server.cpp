@@ -210,3 +210,37 @@ TEST_F(TestL2capServer, testOneOk)
     ASSERT_EQ(l2cap.psm(), BTE_L2CAP_PSM_SDP);
     ASSERT_EQ(l2cap.connectionHandle(), m_connHandle);
 }
+
+TEST_F(TestL2capServer, testUnsupportedPsm)
+{
+    Bte::L2capServer server(m_client, BTE_L2CAP_PSM_SDP);
+    std::vector<Bte::L2cap> receivedConnections;
+    server.onConnected(
+        [&](Bte::L2cap &l2cap) { receivedConnections.push_back(l2cap); });
+
+    /* Send an incoming connection */
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    sendHciConnectionReq(address, {7, 8, 9});
+    bte_handle_events();
+
+    /* Send the connection complete */
+    uint8_t hciStatus = 0;
+    m_backend.sendEvent({HCI_COMMAND_STATUS, 4, hciStatus, 1, 0x9, 0x4});
+    m_connHandle = 0x102;
+    sendHciConnectionComplete(m_connHandle, address);
+    bte_handle_events();
+
+    /* Send the L2CAP connection request */
+    uint8_t incomingReqId = 56;
+    sendConnectionRequest(incomingReqId, BTE_L2CAP_PSM_HID_CTRL);
+    bte_handle_events();
+
+    /* Verify that we refused the request */
+    m_localCid = BTE_L2CAP_CHANNEL_ID_NULL;
+    std::vector<Buffer> expectedData {
+        makeConnectionResponse(incomingReqId, BTE_L2CAP_CONN_RESP_RES_ERR_PSM),
+    };
+    ASSERT_EQ(m_backend.sentData(), expectedData);
+
+    ASSERT_TRUE(receivedConnections.empty());
+}
