@@ -104,15 +104,21 @@ struct bte_l2cap_t {
         struct _bte_l2cap_tmpdata_connect {
             BteL2capConnectCb client_cb;
         } connect;
-        struct _bte_l2cap_tmpdata_connection_req {
-            BteL2capConnectionRequestCb client_cb;
-        } connection_req;
         struct _bte_l2cap_tmpdata_configure {
             BteL2capConfigureCb client_cb;
             void *userdata;
         } configure;
     } last_async_cmd_data;
 };
+
+typedef BteL2cap *(*BteL2capConnectionRequestCb)(
+    BteAcl *acl, BteL2capPsm psm, BteL2capChannelId channel_id);
+extern BteL2capConnectionRequestCb _bte_l2cap_handle_connection_req;
+
+BteAcl *_bte_l2cap_acl_new_connected(BteHci *hci,
+                                     const BteHciAcceptConnectionReply *reply);
+BteL2cap *_bte_l2cap_new_connected(
+    BteAcl *acl, BteL2capPsm psm, BteL2capChannelId channel_id);
 
 typedef struct bte_hci_dev_t {
     BteHciInitStatus init_status;

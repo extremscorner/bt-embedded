@@ -57,13 +57,6 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
                             BteL2capPsm psm, const BteHciConnectParams *params,
                             BteL2capConnectCb callback, void *userdata);
 
-/* Should this be internal only? */
-typedef bool (*BteL2capConnectionRequestCb)(
-    BteL2cap *l2cap, const BteL2capPsm psm, void *userdata);
-BteL2cap *bte_l2cap_new_connected(
-    BteClient *client, const BteHciAcceptConnectionReply *conn_reply,
-    BteL2capConnectionRequestCb callback, void *userdata);
-
 BteL2cap *bte_l2cap_ref(BteL2cap *l2cap);
 void bte_l2cap_unref(BteL2cap *l2cap);
 

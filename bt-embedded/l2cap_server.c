@@ -16,6 +16,7 @@ struct bte_l2cap_server_t {
 };
 
 static BteL2capServer *s_servers = NULL;
+BteL2capConnectionRequestCb _bte_l2cap_handle_connection_req;
 
 static BteL2capServer *server_for_psm(BteL2capPsm psm)
 {
@@ -23,12 +24,6 @@ static BteL2capServer *server_for_psm(BteL2capPsm psm)
         if (s->psm == psm) return s;
     }
     return NULL;
-}
-
-static bool on_l2cap_connection_request(BteL2cap *l2cap, BteL2capPsm psm,
-                                        void *userdata)
-{
-    return server_for_psm(psm) ? true : false;
 }
 
 static void rely_to_client(BteL2capServer *l2cap_server, BteL2cap *l2cap)
@@ -50,15 +45,24 @@ static void on_l2cap_state_changed(BteL2cap *l2cap, BteL2capState state,
     }
 }
 
+static BteL2cap *l2cap_server_handle_connection_req(
+    BteAcl *acl, BteL2capPsm psm, BteL2capChannelId channel_id)
+{
+    BteL2capServer *server = server_for_psm(psm);
+    if (UNLIKELY(!server)) return NULL;
+
+    BteL2cap *l2cap = _bte_l2cap_new_connected(acl, psm, channel_id);
+    bte_l2cap_on_state_changed(l2cap, on_l2cap_state_changed);
+    return l2cap;
+}
+
 static void hci_accept_connection_cb(BteHci *hci,
                                      const BteHciAcceptConnectionReply *reply,
                                      void *userdata)
 {
     if (reply->status != 0) return;
 
-    BteL2cap *l2cap = bte_l2cap_new_connected(
-        bte_hci_get_client(hci), reply, on_l2cap_connection_request, NULL);
-    bte_l2cap_on_state_changed(l2cap, on_l2cap_state_changed);
+    _bte_l2cap_acl_new_connected(hci, reply);
     /* TODO: do we need to store this object? */
 }
 
@@ -93,6 +97,7 @@ static void bte_l2cap_server_free(BteL2capServer *l2cap_server)
 
 BteL2capServer *bte_l2cap_server_new(BteClient *client, BteL2capPsm psm)
 {
+    _bte_l2cap_handle_connection_req = l2cap_server_handle_connection_req;
     BteL2capServer *l2cap_server = malloc(sizeof(BteL2capServer));
     memset(l2cap_server, 0, sizeof(BteL2capServer));
     l2cap_server->ref_count = 1;
