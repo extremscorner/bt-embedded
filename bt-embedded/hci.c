@@ -1338,7 +1338,7 @@ void bte_hci_read_scan_enable(BteHci *hci, BteHciReadScanEnableCb callback,
 }
 
 void bte_hci_write_scan_enable(BteHci *hci, uint8_t scan_enable,
-                                BteHciDoneCb callback, void *userdata)
+                               BteHciDoneCb callback, void *userdata)
 {
     BteBuffer *b = _bte_hci_dev_add_pending_command(
         hci, HCI_W_SCAN_EN_OCF, HCI_HC_BB_OGF, HCI_W_SCAN_EN_PLEN,
