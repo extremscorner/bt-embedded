@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
+#include <set>
 
 #include "bt-embedded/bte.h"
 #include "bt-embedded/client.h"
@@ -30,6 +31,10 @@ protected:
     void TearDown() override
     {
         m_backend.onSendData({});
+        while (!m_connections.empty()) {
+            sendHciDisconnectionComplete(*m_connections.begin());
+        }
+        bte_handle_events();
     }
 
     void setLocalCid(BteL2capChannelId cid)
@@ -117,6 +122,17 @@ protected:
         m_backend.sendEvent(Buffer{ HCI_CONNECTION_COMPLETE, eventSize, status,
                                     low(handle), high(handle) } +
                             address + Buffer{ link_type, enc_mode });
+        m_connections.insert(handle);
+    }
+
+    void sendHciDisconnectionComplete(BteConnHandle handle,
+                                      uint8_t reason = HCI_HOST_TIMEOUT)
+    {
+        const uint8_t eventSize = 1 + 2 + 1;
+        uint8_t status = 0;
+        m_backend.sendEvent({ HCI_DISCONNECTION_COMPLETE, eventSize, status,
+                              low(handle), high(handle), reason });
+        m_connections.erase(handle);
     }
 
     void sendHciConnectionReq(const BteBdAddr &address,
@@ -134,6 +150,7 @@ protected:
     BteL2capChannelId m_localCid;
     BteL2capChannelId m_remoteCid;
     uint8_t m_cmdId;
+    std::set<BteConnHandle> m_connections;
 };
 
 TEST_F(TestL2capServer, testOneOk)
