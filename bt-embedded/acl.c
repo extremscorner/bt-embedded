@@ -232,7 +232,6 @@ static void connect_status_cb(BteHci *hci, const BteHciReply *reply,
     BteAcl *acl = userdata;
 
     if (reply->status != 0) {
-        bte_acl_ref(acl);
         /* The operation failed. Notify the client */
         acl->connected_cb(acl, reply->status);
         bte_acl_unref(acl);

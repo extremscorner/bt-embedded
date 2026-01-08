@@ -1146,9 +1146,6 @@ static void l2cap_disconnect_cb(BteL2cap *l2cap, uint8_t reason)
 
 static void acl_disconnected_cb(BteAcl *acl, uint8_t reason)
 {
-    /* Temporary reference to ensure that we don't destroy the ACL while
-     * iterating over its clients */
-    bte_acl_ref(acl);
     for (int i = 0; i < BTE_ACL_MAX_CLIENTS; i++) {
         BteL2cap *l2cap = L(acl)->clients[i];
         if (l2cap) l2cap_disconnect_cb(l2cap, reason);
@@ -1228,7 +1225,7 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
     } else {
         acl = bte_acl_new(hci, address, sizeof(BteAclL2cap));
         l2cap_setup_acl(acl);
-        l2cap->acl = acl;
+        l2cap->acl = bte_acl_ref(acl);
         if (!params) params = default_connect_params(hci);
         bte_acl_connect(acl, params);
     }
