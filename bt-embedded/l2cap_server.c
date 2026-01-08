@@ -83,9 +83,7 @@ static bool hci_connection_request_cb(BteHci *hci,
 
 static void bte_l2cap_server_free(BteL2capServer *l2cap_server)
 {
-    bte_hci_write_scan_enable(l2cap_server->hci,
-                              BTE_HCI_SCAN_ENABLE_OFF, NULL, NULL);
-    bte_client_unref(bte_hci_get_client(l2cap_server->hci));
+    BteHci *hci = l2cap_server->hci;
 
     BteL2capServer **p_server = &s_servers;
     while (*p_server != l2cap_server) {
@@ -93,6 +91,11 @@ static void bte_l2cap_server_free(BteL2capServer *l2cap_server)
     }
     *p_server = l2cap_server->next;
     free(l2cap_server);
+
+    if (!s_servers) {
+        bte_hci_write_scan_enable(hci, BTE_HCI_SCAN_ENABLE_OFF, NULL, NULL);
+    }
+    bte_client_unref(bte_hci_get_client(hci));
 }
 
 BteL2capServer *bte_l2cap_server_new(BteClient *client, BteL2capPsm psm)
