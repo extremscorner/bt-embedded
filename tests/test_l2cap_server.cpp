@@ -15,8 +15,8 @@
 class TestL2capServer: public testing::Test
 {
 protected:
-    TestL2capServer()
-    {
+    TestL2capServer() {
+        bte_l2cap_reset();
     }
 
     void SetUp() override

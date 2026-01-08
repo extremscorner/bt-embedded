@@ -1393,3 +1393,9 @@ void bte_l2cap_set_configure_reply(BteL2cap *l2cap,
         memcpy((void*)out->ext_flow, in->ext_flow, sizeof(BteL2capConfigExtFlow));
     }
 }
+
+void bte_l2cap_reset()
+{
+    s_next_local_channel_id = 0x0040;
+    s_last_signal_id = 0;
+}

@@ -166,6 +166,10 @@ void bte_l2cap_on_configure(
 void bte_l2cap_set_configure_reply(BteL2cap *l2cap,
                                    const BteL2capConfigureReply *reply);
 
+/* For testing use only: reset the static variables for the channel and message
+ * IDs */
+void bte_l2cap_reset();
+
 #ifdef __cplusplus
 }
 #endif

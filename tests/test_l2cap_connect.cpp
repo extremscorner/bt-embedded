@@ -14,6 +14,7 @@ class TestL2capConnect: public testing::Test
 {
 protected:
     TestL2capConnect() {
+        bte_l2cap_reset();
     }
 
     void SetUp() override {

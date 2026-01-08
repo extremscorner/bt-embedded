@@ -14,6 +14,7 @@ class TestL2capConfig: public testing::Test
 {
 protected:
     TestL2capConfig() {
+        bte_l2cap_reset();
         dummy_driver_set_acl_limits(64, 2);
         BteBdAddr address = {1, 2, 3, 4, 5, 6};
         auto onConnected = [this](std::optional<Bte::L2cap> l2cap,
