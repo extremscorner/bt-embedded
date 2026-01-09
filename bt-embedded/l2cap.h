@@ -159,6 +159,15 @@ void bte_l2cap_on_configure(
 void bte_l2cap_set_configure_reply(BteL2cap *l2cap,
                                    const BteL2capConfigureReply *reply);
 
+/* For the reason we reuse the HCI error codes; if a disconnection is requested
+ * via the L2CAP protocol, reason is 0x13 (if the peer requested the
+ * termination) or 0x16 (if we did). TODO: make these codes public */
+typedef void (*BteL2capDisconnectCb)(
+    BteL2cap *l2cap, uint8_t reason, void *userdata);
+void bte_l2cap_disconnect(BteL2cap *l2cap);
+void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
+                               void *userdata);
+
 /* For testing use only: reset the static variables for the channel and message
  * IDs */
 void bte_l2cap_reset();

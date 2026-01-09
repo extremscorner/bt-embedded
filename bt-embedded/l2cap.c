@@ -1014,6 +1014,90 @@ static bool acl_l2cap_handle_configure_req(
     return true;
 }
 
+static bool l2cap_send_disconnect_req(BteL2cap *l2cap)
+{
+    uint16_t data[2];
+    data[0] = htole16(l2cap->remote_channel_id);
+    data[1] = htole16(l2cap->local_channel_id);
+    BteBuffer *buffer = l2cap_signal(l2cap, L2CAP_SIGNAL_DISCONN_REQ,
+                                     data, sizeof(data));
+    if (UNLIKELY(!buffer)) return false;
+
+    bool ok = bte_acl_send_message(l2cap->acl, buffer) >= 0;
+    if (ok) l2cap_set_state(l2cap, BTE_L2CAP_WAIT_DISCONNECT);
+    return ok;
+}
+
+static bool l2cap_handle_disconnect_resp(
+    BteL2cap *l2cap, BteBufferReader *reader, uint16_t resp_len)
+{
+    uint16_t header[2];
+    if (UNLIKELY(resp_len < sizeof(header))) {
+        BTE_WARN("%s response size %d, needed size %zu\n",
+                 __func__, resp_len, sizeof(header));
+        return false;
+    }
+
+    uint16_t len;
+    if (UNLIKELY((len = bte_buffer_reader_read(reader, header, sizeof(header)))
+                 != sizeof(header))) {
+        BTE_WARN("%s response size %d, actual size %d\n",
+                 __func__, resp_len, len);
+        return false;
+    }
+
+    BteL2capChannelId dest_cid = le16toh(header[0]);
+    BteL2capChannelId source_cid = le16toh(header[1]);
+    if (dest_cid != l2cap->remote_channel_id ||
+        source_cid != l2cap->local_channel_id) {
+        return false;
+    }
+
+    l2cap_set_state(l2cap, BTE_L2CAP_CLOSED);
+    if (l2cap->disconnect_cb) {
+        l2cap->disconnect_cb(l2cap, HCI_CONN_TERMINATED_BY_LOCAL_HOST,
+                             l2cap->disconnect_userdata);
+    }
+    return true;
+}
+
+static bool l2cap_send_disconnect_resp(BteL2cap *l2cap, uint8_t id)
+{
+    uint16_t data[2];
+    data[0] = htole16(l2cap->local_channel_id);
+    data[1] = htole16(l2cap->remote_channel_id);
+    return acl_l2cap_cmd_reply(L(l2cap->acl), L2CAP_SIGNAL_DISCONN_RSP, id,
+                               data, sizeof(data));
+}
+
+static bool acl_l2cap_handle_disconnect_req(
+    BteAclL2cap *acl_l2cap, uint8_t id,
+    BteBufferReader *reader, uint16_t req_len)
+{
+    uint16_t header[2];
+    if (UNLIKELY(req_len < sizeof(header))) return false;
+
+    uint16_t len = bte_buffer_reader_read(reader, header, sizeof(header));
+    if (UNLIKELY(len != sizeof(header))) return false;
+
+    uint16_t dest_cid = le16toh(header[0]);
+    uint16_t source_cid = le16toh(header[1]);
+
+    BteL2cap *l2cap = l2cap_for_local_channel(acl_l2cap, dest_cid);
+    if (UNLIKELY(!l2cap)) {
+        l2cap_reject_command_invalid_cid(acl_l2cap, id, dest_cid, source_cid);
+        return true;
+    }
+
+    l2cap_send_disconnect_resp(l2cap, id);
+    l2cap_set_state(l2cap, BTE_L2CAP_CLOSED);
+    if (l2cap->disconnect_cb) {
+        l2cap->disconnect_cb(l2cap, HCI_OTHER_END_TERMINATED_CONN_USER_ENDED,
+                             l2cap->disconnect_userdata);
+    }
+    return true;
+}
+
 static bool acl_l2cap_handle_request(
     BteAclL2cap *acl_l2cap, uint8_t code, uint8_t id,
     BteBufferReader *reader, uint16_t req_len)
@@ -1025,6 +1109,9 @@ static bool acl_l2cap_handle_request(
         break;
     case L2CAP_SIGNAL_CONFIG_REQ:
         ok = acl_l2cap_handle_configure_req(acl_l2cap, id, reader, req_len);
+        break;
+    case L2CAP_SIGNAL_DISCONN_REQ:
+        ok = acl_l2cap_handle_disconnect_req(acl_l2cap, id, reader, req_len);
         break;
     /* TODO */
     }
@@ -1045,6 +1132,11 @@ static bool l2cap_handle_response(BteL2cap *l2cap, uint8_t code,
         if (l2cap->state == BTE_L2CAP_WAIT_CONFIG_RSP ||
             l2cap->state == BTE_L2CAP_WAIT_CONFIG_REQ_RSP) {
             ok = l2cap_handle_config_resp(l2cap, reader, resp_len);
+        }
+        break;
+    case L2CAP_SIGNAL_DISCONN_RSP:
+        if (l2cap->state == BTE_L2CAP_WAIT_DISCONNECT) {
+            ok = l2cap_handle_disconnect_resp(l2cap, reader, resp_len);
         }
         break;
     /* TODO */
@@ -1378,6 +1470,28 @@ void bte_l2cap_set_configure_reply(BteL2cap *l2cap,
         }
         memcpy((void*)out->ext_flow, in->ext_flow, sizeof(BteL2capConfigExtFlow));
     }
+}
+
+void bte_l2cap_disconnect(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    if (l2cap->state >= BTE_L2CAP_CONFIG_FIRST) {
+        l2cap_send_disconnect_req(l2cap);
+    } else {
+        l2cap_set_state(l2cap, BTE_L2CAP_CLOSED);
+        if (l2cap->disconnect_cb) {
+            l2cap->disconnect_cb(l2cap, HCI_CONN_TERMINATED_BY_LOCAL_HOST,
+                                 l2cap->disconnect_userdata);
+        }
+    }
+}
+
+void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
+                               void *userdata)
+{
+    assert(l2cap != NULL);
+    l2cap->disconnect_cb = callback;
+    l2cap->disconnect_userdata = userdata;
 }
 
 void bte_l2cap_reset()

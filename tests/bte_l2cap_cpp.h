@@ -239,6 +239,18 @@ public:
         bte_l2cap_set_configure_reply(m_l2cap, &r);
     }
 
+    void disconnect() {
+        bte_l2cap_disconnect(m_l2cap);
+    }
+
+    using DisconnectedCb = std::function<void(uint8_t reason)>;
+    void onDisconnected(const DisconnectedCb &cb)
+    {
+        m_onDisconnected = cb;
+        bte_l2cap_on_disconnected(m_l2cap, &L2cap::Callbacks::onDisconnected,
+                                  this);
+    }
+
 private:
     friend class ::TestL2capConfig;
     friend class L2capServer;
@@ -279,11 +291,18 @@ private:
             if (_this->m_onConfigureRequest)
                 _this->m_onConfigureRequest(*params);
         }
+
+        static void onDisconnected(BteL2cap *l2cap, uint8_t reason, void *d) {
+            L2cap *_this = static_cast<L2cap*>(d);
+            if (_this->m_onDisconnected)
+                _this->m_onDisconnected(reason);
+        }
     };
 
     BteL2cap *m_l2cap;
     ConfigureRequestCb m_onConfigureRequest;
     StateChangedCb m_onStateChanged;
+    DisconnectedCb m_onDisconnected;
 };
 
 class L2capServer

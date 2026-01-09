@@ -97,6 +97,9 @@ struct bte_l2cap_t {
     L2capConfigureData *configure_req; /* Incoming request */
     L2capConfigureData *configure_resp; /* Incoming response */
 
+    BteL2capDisconnectCb disconnect_cb;
+    void *disconnect_userdata;
+
     /* Storage for temporary data, only valid since issuing an asynchronous
      * command till the time that its corresponding command status event
      * has been received. */
