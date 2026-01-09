@@ -96,6 +96,26 @@ static const BteHciConnectParams *default_connect_params(BteHci *hci)
     return &s_default_connect_params;
 }
 
+static bool read_signal_header(BteBufferReader *reader, uint16_t resp_len,
+                               void *dest, uint16_t needed_len)
+{
+    if (UNLIKELY(resp_len < needed_len)) {
+        BTE_WARN("%s response size %d, needed size %d\n",
+                 __func__, resp_len, needed_len);
+        return false;
+    }
+
+    uint16_t len;
+    if (UNLIKELY((len = bte_buffer_reader_read(reader, dest, needed_len))
+                 != needed_len)) {
+        BTE_WARN("%s response size %d, actual size %d\n",
+                 __func__, resp_len, len);
+        return false;
+    }
+
+    return true;
+}
+
 static inline bool acl_l2cap_create_message(
     BteAclL2cap *acl_l2cap, BteBufferWriter *writer,
     uint16_t size, BteL2capChannelId channel_id)
@@ -249,15 +269,7 @@ static bool l2cap_connect_cb(BteL2cap *l2cap, BteBufferReader *reader,
 {
     uint16_t data[4];
 
-    if (UNLIKELY(resp_len < sizeof(data))) {
-        BTE_WARN("%s response size %d, needed size %zu\n",
-                 __func__, resp_len, sizeof(data));
-        return false;
-    }
-    uint16_t len;
-    if ((len = bte_buffer_reader_read(reader, data, resp_len)) != resp_len) {
-        BTE_WARN("%s response size %d, actual size %d\n",
-                 __func__, resp_len, len);
+    if (UNLIKELY(!read_signal_header(reader, resp_len, data, sizeof(data)))) {
         return false;
     }
 
@@ -708,19 +720,11 @@ static bool l2cap_handle_config_resp(BteL2cap *l2cap, BteBufferReader *reader,
                                      uint16_t resp_len)
 {
     uint16_t header[3];
-    if (UNLIKELY(resp_len < sizeof(header))) {
-        BTE_WARN("%s response size %d, needed size %zu\n",
-                 __func__, resp_len, sizeof(header));
+    if (UNLIKELY(!read_signal_header(reader, resp_len,
+                                     header, sizeof(header)))) {
         return false;
     }
 
-    uint16_t len;
-    if (UNLIKELY((len = bte_buffer_reader_read(reader, header, sizeof(header)))
-                 != sizeof(header))) {
-        BTE_WARN("%s response size %d, actual size %d\n",
-                 __func__, resp_len, len);
-        return false;
-    }
     uint16_t flags = le16toh(header[1]);
     L2capConfigureData conf;
     if (!l2cap->configure_resp) {
@@ -878,11 +882,11 @@ static bool acl_l2cap_handle_connection_req(
     BteAclL2cap *acl_l2cap, uint8_t id,
     BteBufferReader *reader, uint16_t req_len)
 {
-    if (UNLIKELY(req_len < L2CAP_CONN_REQ_LEN)) return false;
-
     uint16_t header[2];
-    uint16_t len = bte_buffer_reader_read(reader, header, sizeof(header));
-    if (UNLIKELY(len != sizeof(header))) return false;
+    if (UNLIKELY(!read_signal_header(reader, req_len,
+                                     header, sizeof(header)))) {
+        return false;
+    }
 
     BteL2capPsm psm = le16toh(header[0]);
     BteL2capChannelId channel_id = le16toh(header[1]);
@@ -907,15 +911,15 @@ static bool acl_l2cap_handle_configure_req(
     BteAclL2cap *acl_l2cap, uint8_t id,
     BteBufferReader *reader, uint16_t req_len)
 {
-    if (UNLIKELY(req_len < L2CAP_CONFIG_REQ_HDR_LEN)) return false;
-
     /* Create a copy of the reader: in case of unrecognized parameters we'll be
      * parsing the buffer twice */
     BteBufferReader reader_copy = *reader;
 
     uint16_t header[2];
-    uint16_t len = bte_buffer_reader_read(reader, header, sizeof(header));
-    if (UNLIKELY(len != sizeof(header))) return false;
+    if (UNLIKELY(!read_signal_header(reader, req_len,
+                                     header, sizeof(header)))) {
+        return false;
+    }
 
     uint16_t channel_id = le16toh(header[0]);
     uint16_t flags = le16toh(header[1]);
@@ -1024,17 +1028,8 @@ static bool l2cap_handle_disconnect_resp(
     BteL2cap *l2cap, BteBufferReader *reader, uint16_t resp_len)
 {
     uint16_t header[2];
-    if (UNLIKELY(resp_len < sizeof(header))) {
-        BTE_WARN("%s response size %d, needed size %zu\n",
-                 __func__, resp_len, sizeof(header));
-        return false;
-    }
-
-    uint16_t len;
-    if (UNLIKELY((len = bte_buffer_reader_read(reader, header, sizeof(header)))
-                 != sizeof(header))) {
-        BTE_WARN("%s response size %d, actual size %d\n",
-                 __func__, resp_len, len);
+    if (UNLIKELY(!read_signal_header(reader, resp_len,
+                                     header, sizeof(header)))) {
         return false;
     }
 
@@ -1067,10 +1062,10 @@ static bool acl_l2cap_handle_disconnect_req(
     BteBufferReader *reader, uint16_t req_len)
 {
     uint16_t header[2];
-    if (UNLIKELY(req_len < sizeof(header))) return false;
-
-    uint16_t len = bte_buffer_reader_read(reader, header, sizeof(header));
-    if (UNLIKELY(len != sizeof(header))) return false;
+    if (UNLIKELY(!read_signal_header(reader, req_len,
+                                     header, sizeof(header)))) {
+        return false;
+    }
 
     uint16_t dest_cid = le16toh(header[0]);
     uint16_t source_cid = le16toh(header[1]);
