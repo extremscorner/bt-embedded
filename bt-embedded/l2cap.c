@@ -920,15 +920,7 @@ static bool acl_l2cap_handle_configure_req(
     uint16_t channel_id = le16toh(header[0]);
     uint16_t flags = le16toh(header[1]);
 
-    BteL2cap *l2cap = NULL;
-    for (int i = 0; i < BTE_ACL_MAX_CLIENTS; i++) {
-        BteL2cap *client = acl_l2cap->clients[i];
-        if (client && client->local_channel_id == channel_id) {
-            l2cap = client;
-            break;
-        }
-    }
-
+    BteL2cap *l2cap = l2cap_for_local_channel(acl_l2cap, channel_id);
     if (UNLIKELY(!l2cap ||
                  (l2cap->state != BTE_L2CAP_WAIT_CONFIG &&
                   l2cap->state != BTE_L2CAP_WAIT_CONFIG_REQ &&
