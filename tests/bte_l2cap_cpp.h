@@ -80,6 +80,9 @@ public:
         return bte_l2cap_get_psm(m_l2cap);
     }
 
+    uint16_t mtu() const { return bte_l2cap_get_mtu(m_l2cap); }
+    uint16_t remoteMtu() const { return bte_l2cap_get_remote_mtu(m_l2cap); }
+
     BteL2capState state() const {
         return bte_l2cap_get_state(m_l2cap);
     }

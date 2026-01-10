@@ -310,6 +310,25 @@ static bool l2cap_connect_cb(BteL2cap *l2cap, BteBufferReader *reader,
     return true;
 }
 
+static void l2cap_config_validate(BteL2cap *l2cap, L2capConfigureData *conf)
+{
+    /* TODO */
+}
+
+static void l2cap_config_apply(BteL2cap *l2cap,
+                               const BteL2capConfigureParams *params,
+                               bool remote)
+{
+    uint16_t mtu = params->field_mask & BTE_L2CAP_CONFIG_MTU ?
+        params->mtu : L2CAP_MTU_DEFAULT;
+    if (remote) {
+        l2cap->remote_mtu = mtu;
+    } else {
+        l2cap->mtu = mtu;
+    }
+    /* TODO: handle the other parameters */
+}
+
 static void l2cap_config_params_clear(BteL2capConfigureParams *params)
 {
     free((BteL2capConfigQos *)params->qos);
@@ -757,6 +776,10 @@ static bool l2cap_handle_config_resp(BteL2cap *l2cap, BteBufferReader *reader,
     }
 
     if (!flags & L2CAP_CONFIG_FLAG_CONTINUATION) {
+        if (result == L2CAP_CONFIG_RES_OK) {
+            bool remote = false;
+            l2cap_config_apply(l2cap, &l2cap->configure_resp->params, remote);
+        }
         /* No more messages following; we can deliver the reply to the
          * client */
         BteL2capConfigureReply reply;
@@ -862,20 +885,6 @@ static void l2cap_configure_reply_type_error(
     BteBuffer *buffer = bte_buffer_writer_end(&writer);
     bte_acl_send_message(l2cap->acl, buffer);
     return;
-}
-
-static void l2cap_config_validate(BteL2cap *l2cap, L2capConfigureData *conf)
-{
-    /* TODO */
-}
-
-static void l2cap_config_apply(BteL2cap *l2cap,
-                               const BteL2capConfigureParams *params)
-{
-    if (params->field_mask & BTE_L2CAP_CONFIG_MTU) {
-        l2cap->remote_mtu = params->mtu;
-    }
-    /* TODO: handle the other parameters */
 }
 
 static bool acl_l2cap_handle_connection_req(
@@ -985,7 +994,8 @@ static bool acl_l2cap_handle_configure_req(
         /* This sets the rejected mask as needed */
         l2cap_config_validate(l2cap, conf);
         if (conf->rejected_mask == 0) {
-            l2cap_config_apply(l2cap, &conf->params);
+            bool remote = true;
+            l2cap_config_apply(l2cap, &conf->params, remote);
         }
 
         l2cap_config_send(l2cap, conf, id);
@@ -1366,6 +1376,18 @@ BteL2capPsm bte_l2cap_get_psm(BteL2cap *l2cap)
 {
     assert(l2cap != NULL);
     return l2cap->psm;
+}
+
+uint16_t bte_l2cap_get_mtu(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return l2cap->mtu;
+}
+
+uint16_t bte_l2cap_get_remote_mtu(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return l2cap->remote_mtu;
 }
 
 BteL2capState bte_l2cap_get_state(BteL2cap *l2cap)

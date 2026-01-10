@@ -174,6 +174,7 @@ TEST_F(TestL2capConfig, testOutgoingEmpty) {
     };
     ASSERT_EQ(replies, expectedReplies);
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ);
+    ASSERT_EQ(m_l2cap->mtu(), 672);
 }
 
 TEST_F(TestL2capConfig, testOutgoingSingleFields) {
@@ -206,6 +207,7 @@ TEST_F(TestL2capConfig, testOutgoingSingleFields) {
         {0, 0, params},
     };
     ASSERT_EQ(replies, expectedReplies);
+    ASSERT_EQ(m_l2cap->mtu(), 0x1234);
 }
 
 TEST_F(TestL2capConfig, testOutgoingCompositeFields) {
@@ -418,6 +420,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
         {BTE_L2CAP_CONFIG_MTU|BTE_L2CAP_CONFIG_RETX_FLOW, 0, expectedParams},
     };
     ASSERT_EQ(replies, expectedReplies);
+    ASSERT_EQ(m_l2cap->mtu(), 0x2301);
 }
 
 TEST_F(TestL2capConfig, testOutgoingUnknownParam) {
@@ -476,6 +479,7 @@ TEST_F(TestL2capConfig, testIncomingEmpty) {
         makeResponse({}, reqId),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
+    ASSERT_EQ(m_l2cap->remoteMtu(), 672);
 }
 
 TEST_F(TestL2capConfig, testIncomingUnknownParam) {
