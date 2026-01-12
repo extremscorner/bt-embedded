@@ -1171,6 +1171,27 @@ static bool acl_l2cap_handle_response(
     return bte_buffer_reader_advance(reader, cmd_len) == cmd_len;
 }
 
+static int acl_incoming_data_check_cb(BteAcl *acl, BteBufferReader *reader)
+{
+    const uint16_t *header = bte_buffer_reader_read_n(reader, L2CAP_HDR_LEN);
+    uint16_t total_len = le16toh(header[0]);
+    BteL2capChannelId channel_id = le16toh(header[1]);
+
+    bool ok = false;
+    if (channel_id == BTE_L2CAP_CHANNEL_ID_SIGNALLING) {
+        ok = total_len <= L2CAP_MTU_DEFAULT;
+    } else {
+        BteL2cap *l2cap = l2cap_for_local_channel(L(acl), channel_id);
+        if (UNLIKELY(!l2cap)) {
+            ok = false;
+        } else {
+            ok = total_len <= l2cap->mtu;
+        }
+    }
+
+    return ok ? total_len : -1;
+}
+
 static void acl_data_received_cb(BteAcl *acl, BteBufferReader *reader)
 {
     const uint16_t *header = bte_buffer_reader_read_n(reader, L2CAP_HDR_LEN);
@@ -1284,6 +1305,7 @@ static BteL2cap *bte_l2cap_new()
 static void l2cap_setup_acl(BteAcl *acl)
 {
     acl->connected_cb = acl_connected_cb;
+    acl->incoming_data_check_cb = acl_incoming_data_check_cb;
     acl->data_received_cb = acl_data_received_cb;
     acl->disconnected_cb = acl_disconnected_cb;
     /* TODO: set the other signal handlers too */

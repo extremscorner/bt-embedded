@@ -17,6 +17,8 @@
 #define BTE_ACL_PB_CONTINUATION   1
 #define BTE_ACL_PB_FIRST_FLUSH    2
 
+#define ACL_INVALID_PACKET 0xffff
+
 static BteAcl *find_acl_by_conn_handle(BteConnHandle conn_handle)
 {
     BteHciDev *dev = &_bte_hci_dev;
@@ -52,17 +54,19 @@ static void on_data_received(BteBuffer *buffer)
     }
 
     if (packet_boundary != BTE_ACL_PB_CONTINUATION) {
-        /* The ACL header does not give us enough information to tell if the
-         * message is complete: in order to do that, we need to look at the
-         * L2CAP header to find out the total length of the segmented message.
-         * It would be more proper if this was done in the l2cap class (and one
-         * way to do that would be to invoke a "packet_received()" callback
-         * here, and then have a bte_act_set_message_size() method that the
-         * l2cap code would call), but since all ACL data connections have a
-         * L2CAP protocol on top of them, we take a shortcut and read the
-         * length from here. */
-        uint16_t msg_length = read_le16(buffer->data + BTE_ACL_HDR_LEN);
-        acl->reassembled_message_size = msg_length;
+        BteBufferReader reader;
+        bte_buffer_reader_init(&reader, buffer);
+        bte_buffer_reader_set_header_size(&reader, BTE_ACL_HDR_LEN);
+        int rc = acl->incoming_data_check_cb(acl, &reader);
+        if (UNLIKELY(rc < 0)) {
+            /* Skip this packet and all the subsequent continuation ones */
+            acl->reassembled_message_size = ACL_INVALID_PACKET;
+            return;
+        } else {
+            acl->reassembled_message_size = rc;
+        }
+    } else if (UNLIKELY(acl->reassembled_message_size == ACL_INVALID_PACKET)) {
+        return;
     }
 
     uint16_t packet_length = read_le16(buffer->data + BTE_ACL_HDR_POS_LEN);

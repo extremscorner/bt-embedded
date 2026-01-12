@@ -1,6 +1,7 @@
 #ifndef BTE_L2CAP_H
 #define BTE_L2CAP_H
 
+#include "buffer.h"
 #include "hci.h"
 #include "types.h"
 

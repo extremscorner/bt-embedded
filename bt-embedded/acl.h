@@ -31,6 +31,10 @@ struct bte_acl_t {
 
     void (*connected_cb)(BteAcl *acl, uint8_t status);
     void (*disconnected_cb)(BteAcl *acl, uint8_t reason);
+    /* Return -1 if the packet (and the successive continuation patckets) need
+     * to be discarded; if not, return the expected length of the reassembled
+     * data */
+    int (*incoming_data_check_cb)(BteAcl *acl, BteBufferReader *reader);
     void (*data_received_cb)(BteAcl *acl, BteBufferReader *reader);
     void (*completed_packets_cb)(BteAcl *acl, int sent_messages);
 };
