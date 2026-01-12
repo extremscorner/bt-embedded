@@ -273,17 +273,14 @@ static bool l2cap_connect_cb(BteL2cap *l2cap, BteBufferReader *reader,
         return false;
     }
 
-    BteL2cap *l2cap_param;
     BteL2capConnectionResponse reply;
     reply.result = le16toh(data[2]);
     if (reply.result > BTE_L2CAP_CONN_RESP_RES_PENDING) {
         /* An error occurred */
-        l2cap_param = NULL;
         reply.remote_channel_id = reply.local_channel_id = 0;
         reply.status = BTE_L2CAP_CONN_RESP_STATUS_NO_INFO;
         l2cap_set_state(l2cap, BTE_L2CAP_CLOSED);
     } else {
-        l2cap_param = l2cap;
         reply.remote_channel_id = le16toh(data[0]);
         reply.local_channel_id = le16toh(data[1]);
         reply.status = le16toh(data[3]);
@@ -300,14 +297,18 @@ static bool l2cap_connect_cb(BteL2cap *l2cap, BteBufferReader *reader,
     }
 
     BteL2capConnectCb client_cb = l2cap->last_async_cmd_data.connect.client_cb;
-    client_cb(l2cap_param, &reply, l2cap->userdata);
+    client_cb(reply.result == BTE_L2CAP_CONN_RESP_RES_OK ? l2cap : NULL,
+              &reply, l2cap->userdata);
     if (reply.result != BTE_L2CAP_CONN_RESP_RES_PENDING) {
         /* No more callbacks will be invoked. The client should have taken its
          * reference to the l2cap opject; if not, it will be destroyed here */
         bte_l2cap_unref(l2cap);
+        return true;
+    } else {
+        /* We return false in case of a pending response, to signal that we are
+         * still waiting for a response. */
+        return false;
     }
-
-    return true;
 }
 
 static void l2cap_config_validate(BteL2cap *l2cap, L2capConfigureData *conf)
@@ -1157,9 +1158,11 @@ static bool acl_l2cap_handle_response(
              * client doesn't care about it */
             bte_l2cap_ref(l2cap);
             bool ok = l2cap_handle_response(l2cap, code, reader, cmd_len);
-            l2cap->expected_response_count--;
-            if (l2cap->expected_response_count)
-                l2cap->expected_response_id++;
+            if (ok) {
+                l2cap->expected_response_count--;
+                if (l2cap->expected_response_count)
+                    l2cap->expected_response_id++;
+            }
             bte_l2cap_unref(l2cap);
             return ok;
         }

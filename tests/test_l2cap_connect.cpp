@@ -231,6 +231,60 @@ TEST_F(TestL2capConnect, testOutgoingWithHciParams) {
     ASSERT_EQ(replies, expectedReplies);
 }
 
+TEST_F(TestL2capConnect, testOutgoingPending) {
+    using L = Bte::L2cap;
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    std::vector<BteL2capConnectionResponse> replies;
+    auto onConnected = [&](std::optional<Bte::L2cap> l2cap,
+                           const BteL2capConnectionResponse &reply) {
+        bool isDone = reply.result != BTE_L2CAP_CONN_RESP_RES_PENDING;
+        ASSERT_EQ(l2cap.has_value(), isDone);
+        replies.push_back(reply);
+    };
+    BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
+    L::newOutgoing(m_client, address, psm, {}, onConnected);
+
+    /* Default values */
+    BtePacketType packetType = BTE_PACKET_TYPE_DM1 | BTE_PACKET_TYPE_DH1;
+    uint16_t clockOffset = 0;
+    uint8_t pageScanRepMode = 1;
+    bool roleSwitch = true;
+    std::vector<Buffer> expectedCommands {
+        makeHciCreateConnection(address, packetType, pageScanRepMode,
+                                clockOffset, roleSwitch),
+    };
+    ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
+
+    /* Send the status reply for HCI create connection */
+    uint8_t status = 0;
+    m_backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x5, 0x4});
+    bte_handle_events();
+    /* Send the actual reply */
+    sendHciConnectionComplete(address);
+    bte_handle_events();
+
+    /* Read the L2CAP connection request */
+    uint8_t reqId = m_cmdId++;
+    Buffer expectedData = makeRequest(reqId, psm);
+    ASSERT_EQ(m_backend.lastData(), expectedData);
+
+    /* Send the L2cap connect response (pending) */
+    peerResponds(reqId, BTE_L2CAP_CONN_RESP_RES_PENDING,
+                 BTE_L2CAP_CONN_RESP_STATUS_AUTHORIZATION);
+    bte_handle_events();
+
+    /* Send the L2cap connect response */
+    peerResponds(reqId);
+    bte_handle_events();
+
+    std::vector<BteL2capConnectionResponse> expectedReplies = {
+        {0x40, 0x40, BTE_L2CAP_CONN_RESP_RES_PENDING,
+            BTE_L2CAP_CONN_RESP_STATUS_AUTHORIZATION},
+        {0x40, 0x40, 0, 0},
+    };
+    ASSERT_EQ(replies, expectedReplies);
+}
+
 TEST_F(TestL2capConnect, testOutgoingHciError) {
     using L = Bte::L2cap;
     BteBdAddr address = {1, 2, 3, 4, 5, 6};

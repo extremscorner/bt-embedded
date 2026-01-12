@@ -272,7 +272,9 @@ private:
                             void *userdata) {
             ConnectCb *cb = static_cast<ConnectCb*>(userdata);
             (*cb)(l2cap ? L2cap(bte_l2cap_ref(l2cap)) : std::optional<L2cap>{}, *reply);
-            delete cb;
+            if (reply->result != BTE_L2CAP_CONN_RESP_RES_PENDING) {
+                delete cb;
+            }
         }
 
         static void configure(BteL2cap *l2cap,
