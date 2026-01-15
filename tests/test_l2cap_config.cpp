@@ -20,57 +20,6 @@ protected:
     void setRemoteMtu(uint16_t mtu) {
         m_l2cap->m_l2cap->remote_mtu = mtu;
     }
-
-    Buffer makeResponse(const Buffer &config, uint8_t reqId,
-                        BteL2capChannelId sourceCid,
-                        uint16_t result = L2CAP_CONFIG_RES_OK,
-                        bool continuation = false) {
-        uint8_t confSize = config.size();
-        uint16_t flags = continuation ? L2CAP_CONFIG_FLAG_CONTINUATION : 0;
-        return Buffer{
-            0x00, 0x21, /* Connection handle */
-            low(14 + confSize), high(14 + confSize), /* Total length */
-            low(10 + confSize), high(10 + confSize), /* L2CAP length */
-            0x01, 0x00, /* Signalling channel */
-            L2CAP_SIGNAL_CONFIG_RSP,
-            reqId,
-            low(6 + confSize), high(6 + confSize), /* command length */
-            low(sourceCid), high(sourceCid),
-            low(flags), high(flags), /* flags */
-            low(result), high(result), /* result */
-            } + config;
-    }
-
-    void peerResponds(const Buffer &config, uint8_t reqId,
-                      uint16_t result = L2CAP_CONFIG_RES_OK,
-                      bool continuation = false) {
-        m_backend.sendData(makeResponse(config, reqId, m_localCid,
-                                        result, continuation));
-    }
-
-    Buffer makeRequest(const Buffer &config, uint8_t reqId,
-                       BteL2capChannelId destCid,
-                       bool continuation = false) {
-        uint8_t confSize = config.size();
-        uint16_t flags = continuation ? L2CAP_CONFIG_FLAG_CONTINUATION : 0;
-        return Buffer{
-            0x00, 0x21, /* 0x100 handle + flushable flag */
-            low(12 + confSize), high(12 + confSize), /* Total length */
-            low(8 + confSize), high(8 + confSize), /* L2CAP length */
-            0x01, 0x00, /* signalling channel */
-            L2CAP_SIGNAL_CONFIG_REQ,
-            reqId,
-            low(4 + confSize), high(4 + confSize), /* cmd length */
-            low(destCid), high(destCid),
-            low(flags), high(flags), /* flags (continuation) */
-        } + config;
-    }
-
-    void sendRequest(const Buffer &config, uint8_t reqId,
-                     bool continuation = false) {
-        m_backend.sendData(makeRequest(config, reqId, m_localCid,
-                                       continuation));
-    }
 };
 
 TEST_F(TestL2capConfig, testOutgoingEmpty) {
@@ -87,11 +36,11 @@ TEST_F(TestL2capConfig, testOutgoingEmpty) {
 
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
     uint8_t reqId = m_cmdId++;
-    Buffer expectedData = makeRequest({}, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest({}, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
 
     /* Send an empty reply */
-    peerResponds(Buffer(), reqId);
+    sendConfigResponse(Buffer(), reqId);
     bte_handle_events();
 
     std::vector<L::ConfigureReply> expectedReplies = {
@@ -121,11 +70,11 @@ TEST_F(TestL2capConfig, testOutgoingSingleFields) {
         L2CAP_CONFIG_FRAME_CHECK_SEQ, 1, 0x67,
         L2CAP_CONFIG_MAX_WINDOW_SIZE, 2, 0x56, 0x34,
     };
-    Buffer expectedData = makeRequest(config, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest(config, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
 
     /* Send a reply confirming all these fields */
-    peerResponds(config, reqId);
+    sendConfigResponse(config, reqId);
     bte_handle_events();
 
     std::vector<L::ConfigureReply> expectedReplies = {
@@ -189,11 +138,11 @@ TEST_F(TestL2capConfig, testOutgoingCompositeFields) {
         0x33, 0x22, 0x11, 0x99,
         0x77, 0x66, 0x55, 0x44,
     };
-    Buffer expectedData = makeRequest(config, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest(config, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
 
     /* Send a reply containing the same fields */
-    peerResponds(config, reqId);
+    sendConfigResponse(config, reqId);
     bte_handle_events();
 
     std::vector<L::ConfigureReply> expectedReplies = {
@@ -275,15 +224,15 @@ TEST_F(TestL2capConfig, testFragmentation) {
         L2CAP_CONFIG_MAX_WINDOW_SIZE, 2, 0x56, 0x34,
     };
     std::vector<Buffer> expectedData = {
-        makeRequest(config0, reqId0, m_remoteCid, true),
-        makeRequest(config1, reqId1, m_remoteCid, false),
+        makeConfigRequest(config0, reqId0, m_remoteCid, true),
+        makeConfigRequest(config1, reqId1, m_remoteCid, false),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
     m_backend.clear();
 
     /* Send a reply containing the same fields, but split differently;
      * first, send an ack reply to the first packet: */
-    peerResponds({}, reqId0, L2CAP_CONFIG_RES_OK, true);
+    sendConfigResponse({}, reqId0, L2CAP_CONFIG_RES_OK, true);
     bte_handle_events();
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
 
@@ -295,7 +244,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
         0x33, 0x44,
         0x55, 0x66,
     };
-    peerResponds(configRej, reqId1, L2CAP_CONFIG_RES_ERR_PARAMS, true);
+    sendConfigResponse(configRej, reqId1, L2CAP_CONFIG_RES_ERR_PARAMS, true);
     bte_handle_events();
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
 
@@ -303,7 +252,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
      * the peer to continue sending the configuration response */
     uint8_t reqId2 = m_cmdId++;
     expectedData = {
-        makeRequest({}, reqId2, m_remoteCid),
+        makeConfigRequest({}, reqId2, m_remoteCid),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
 
@@ -317,7 +266,7 @@ TEST_F(TestL2capConfig, testFragmentation) {
         0x99, 0x88, 0x77, 0x66,
         0x44, 0x33, 0x22, 0x11,
     };
-    peerResponds(configOk, reqId2);
+    sendConfigResponse(configOk, reqId2);
     bte_handle_events();
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ);
 
@@ -365,14 +314,14 @@ TEST_F(TestL2capConfig, testOutgoingUnknownParam) {
         L2CAP_CONFIG_FLUSH_TIMEOUT, 2, 0x45, 0x23,
         L2CAP_CONFIG_FRAME_CHECK_SEQ, 1, 0x67,
     };
-    Buffer expectedData = makeRequest(config, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest(config, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
 
     /* Send a reply pretending that flush timeout is unknown */
     Buffer configUnknown {
         L2CAP_CONFIG_FLUSH_TIMEOUT, 2, 0x45, 0x23,
     };
-    peerResponds(configUnknown, reqId, L2CAP_CONFIG_RES_ERR_UNKNOWN, false);
+    sendConfigResponse(configUnknown, reqId, L2CAP_CONFIG_RES_ERR_UNKNOWN, false);
     bte_handle_events();
 
     std::vector<L::ConfigureReply> expectedReplies = {
@@ -391,7 +340,7 @@ TEST_F(TestL2capConfig, testIncomingEmpty) {
 
     uint8_t reqId = 56;
     /* Send an empty request */
-    sendRequest({}, reqId);
+    sendConfigRequest({}, reqId);
     bte_handle_events();
 
     std::vector<L::ConfigureParams> expectedParams = {
@@ -401,7 +350,7 @@ TEST_F(TestL2capConfig, testIncomingEmpty) {
 
     /* Check that our reply was sent */
     std::vector<Buffer> expectedData = {
-        makeResponse({}, reqId, m_remoteCid),
+        makeConfigResponse({}, reqId, m_remoteCid),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
     ASSERT_EQ(m_l2cap->remoteMtu(), 672);
@@ -420,7 +369,7 @@ TEST_F(TestL2capConfig, testIncomingUnknownParam) {
         0x77, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
         L2CAP_CONFIG_FLUSH_TIMEOUT, 2, 0x11, 0x22,
     };
-    sendRequest(config, reqId);
+    sendConfigRequest(config, reqId);
     bte_handle_events();
 
     std::vector<L::ConfigureParams> expectedParams = {};
@@ -431,8 +380,8 @@ TEST_F(TestL2capConfig, testIncomingUnknownParam) {
         0x77, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
     };
     std::vector<Buffer> expectedData = {
-        makeResponse(configErr, reqId, m_remoteCid,
-                     L2CAP_CONFIG_RES_ERR_UNKNOWN),
+        makeConfigResponse(configErr, reqId, m_remoteCid,
+                           L2CAP_CONFIG_RES_ERR_UNKNOWN),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
 }
@@ -450,7 +399,7 @@ TEST_F(TestL2capConfig, testIncomingUnknownParamHint) {
         0xAA, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
         L2CAP_CONFIG_FLUSH_TIMEOUT, 2, 0x11, 0x22,
     };
-    sendRequest(config, reqId);
+    sendConfigRequest(config, reqId);
     bte_handle_events();
 
     L::ConfigureParams params;
@@ -465,7 +414,7 @@ TEST_F(TestL2capConfig, testIncomingUnknownParamHint) {
         L2CAP_CONFIG_FLUSH_TIMEOUT, 2, 0x11, 0x22,
     };
     std::vector<Buffer> expectedData = {
-        makeResponse(configOk, reqId, m_remoteCid),
+        makeConfigResponse(configOk, reqId, m_remoteCid),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
 }
@@ -517,7 +466,7 @@ TEST_F(TestL2capConfig, testIncomingWithLongerResponse) {
         0x99, 0x88,
         L2CAP_CONFIG_FLUSH_TIMEOUT, 2, 0x11, 0x22,
     };
-    sendRequest(config, reqId);
+    sendConfigRequest(config, reqId);
     bte_handle_events();
 
     ASSERT_EQ(incomingParams.size(), 1);
@@ -533,8 +482,8 @@ TEST_F(TestL2capConfig, testIncomingWithLongerResponse) {
         0x44, 0x33, 0x22, 0x11,
     };
     std::vector<Buffer> expectedData = {
-        makeResponse(config0, reqId, m_remoteCid,
-                     L2CAP_CONFIG_RES_ERR_REJ, true),
+        makeConfigResponse(config0, reqId, m_remoteCid,
+                           L2CAP_CONFIG_RES_ERR_REJ, true),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
     m_backend.clear();
@@ -542,7 +491,7 @@ TEST_F(TestL2capConfig, testIncomingWithLongerResponse) {
     /* Now the client sends an empty request to retrieve the rest of our
      * response */
     uint8_t reqId2 = 45;
-    sendRequest({}, reqId2);
+    sendConfigRequest({}, reqId2);
     bte_handle_events();
 
     /* Check that the rest of our reply was sent */
@@ -553,7 +502,7 @@ TEST_F(TestL2capConfig, testIncomingWithLongerResponse) {
         0x99, 0x88,
     };
     expectedData = {
-        makeResponse(config1, reqId2, m_remoteCid,
+        makeConfigResponse(config1, reqId2, m_remoteCid,
                      L2CAP_CONFIG_RES_ERR_REJ, false),
     };
     ASSERT_EQ(m_backend.sentData(), expectedData);
@@ -566,7 +515,7 @@ TEST_F(TestL2capConfig, testConfigureMoreData) {
     m_l2cap->configure(params, [&](const L::ConfigureReply &r) {});
 
     uint8_t reqId = m_cmdId++;
-    Buffer expectedData = makeRequest({}, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest({}, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
 
     /* Send an empty reply, sending the extra field was crashing the lib during
@@ -608,21 +557,21 @@ TEST_F(TestL2capConfig, testStateInitiatiorFirst) {
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
 
     uint8_t reqId = m_cmdId++;
-    Buffer expectedData = makeRequest({}, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest({}, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
 
     /* Send an empty reply */
-    peerResponds(Buffer(), reqId);
+    sendConfigResponse(Buffer(), reqId);
     bte_handle_events();
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_REQ);
 
     uint8_t incomingReqId = 56;
     /* Send an empty request */
-    sendRequest({}, incomingReqId);
+    sendConfigRequest({}, incomingReqId);
     bte_handle_events();
 
     /* Check that our reply was sent */
-    expectedData = makeResponse({}, incomingReqId, m_remoteCid);
+    expectedData = makeConfigResponse({}, incomingReqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
     ASSERT_EQ(state, BTE_L2CAP_OPEN);
 }
@@ -646,19 +595,19 @@ TEST_F(TestL2capConfig, testStateAcceptorFirst) {
 
     uint8_t incomingReqId = 56;
     /* Send an empty request */
-    sendRequest({}, incomingReqId);
+    sendConfigRequest({}, incomingReqId);
     bte_handle_events();
     ASSERT_EQ(state, BTE_L2CAP_WAIT_SEND_CONFIG);
 
     L::ConfigureParams params;
     m_l2cap->configure(params, [&](const L::ConfigureReply &r) {});
     uint8_t reqId = m_cmdId++;
-    Buffer expectedData = makeRequest({}, reqId, m_remoteCid);
+    Buffer expectedData = makeConfigRequest({}, reqId, m_remoteCid);
     ASSERT_EQ(m_backend.lastData(), expectedData);
     ASSERT_EQ(state, BTE_L2CAP_WAIT_CONFIG_RSP);
 
     /* Send an empty reply */
-    peerResponds(Buffer(), reqId);
+    sendConfigResponse(Buffer(), reqId);
     bte_handle_events();
     ASSERT_EQ(state, BTE_L2CAP_OPEN);
 }

@@ -65,6 +65,57 @@ protected:
         m_backend.sendData(makeConnectResponse(reqId));
     }
 
+    Buffer makeConfigResponse(const Buffer &config, uint8_t reqId,
+                              BteL2capChannelId sourceCid,
+                              uint16_t result = L2CAP_CONFIG_RES_OK,
+                              bool continuation = false) {
+        uint8_t confSize = config.size();
+        uint16_t flags = continuation ? L2CAP_CONFIG_FLAG_CONTINUATION : 0;
+        return Buffer{
+            0x00, 0x21, /* Connection handle */
+            low(14 + confSize), high(14 + confSize), /* Total length */
+            low(10 + confSize), high(10 + confSize), /* L2CAP length */
+            0x01, 0x00, /* Signalling channel */
+            L2CAP_SIGNAL_CONFIG_RSP,
+            reqId,
+            low(6 + confSize), high(6 + confSize), /* command length */
+            low(sourceCid), high(sourceCid),
+            low(flags), high(flags), /* flags */
+            low(result), high(result), /* result */
+            } + config;
+    }
+
+    void sendConfigResponse(const Buffer &config, uint8_t reqId,
+                            uint16_t result = L2CAP_CONFIG_RES_OK,
+                            bool continuation = false) {
+        m_backend.sendData(makeConfigResponse(config, reqId, m_localCid,
+                                              result, continuation));
+    }
+
+    Buffer makeConfigRequest(const Buffer &config, uint8_t reqId,
+                             BteL2capChannelId destCid,
+                             bool continuation = false) {
+        uint8_t confSize = config.size();
+        uint16_t flags = continuation ? L2CAP_CONFIG_FLAG_CONTINUATION : 0;
+        return Buffer{
+            0x00, 0x21, /* 0x100 handle + flushable flag */
+            low(12 + confSize), high(12 + confSize), /* Total length */
+            low(8 + confSize), high(8 + confSize), /* L2CAP length */
+            0x01, 0x00, /* signalling channel */
+            L2CAP_SIGNAL_CONFIG_REQ,
+            reqId,
+            low(4 + confSize), high(4 + confSize), /* cmd length */
+            low(destCid), high(destCid),
+            low(flags), high(flags), /* flags (continuation) */
+        } + config;
+    }
+
+    void sendConfigRequest(const Buffer &config, uint8_t reqId,
+                           bool continuation = false) {
+        m_backend.sendData(makeConfigRequest(config, reqId, m_localCid,
+                                             continuation));
+    }
+
     Buffer makeHciCreateDisconnection(const BteBdAddr &address,
                                    BtePacketType packetType,
                                    uint8_t pageScanRepMode,
@@ -190,6 +241,37 @@ protected:
 
 protected:
     std::unique_ptr<Bte::L2cap> m_l2cap;
+};
+
+class TestL2capFixtureConfigured: public TestL2capFixtureConnected
+{
+protected:
+    void SetUp() override {
+        TestL2capFixtureConnected::SetUp();
+        using L = Bte::L2cap;
+
+        /* Send our request */
+        m_l2cap->configure({}, [&](const L::ConfigureReply &r) {});
+        ASSERT_EQ(m_l2cap->state(), BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
+
+        /* Receive a reply */
+        sendConfigResponse(Buffer(), m_cmdId++);
+        bte_handle_events();
+        ASSERT_EQ(m_l2cap->state(), BTE_L2CAP_WAIT_CONFIG_REQ);
+
+        /* Receive the peer request and reply to it */
+        m_l2cap->onConfigureRequest([&](const L::ConfigureParams &params) {
+            m_l2cap->setConfigureReply({});
+        });
+        sendConfigRequest({}, 42);
+        bte_handle_events();
+        ASSERT_EQ(m_l2cap->state(), BTE_L2CAP_OPEN);
+        m_backend.clear();
+    }
+
+    void TearDown() override {
+        TestL2capFixture::TearDown();
+    }
 };
 
 #endif // BTE_TESTS_L2CAP_FIXTURES_H
