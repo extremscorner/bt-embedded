@@ -1,6 +1,7 @@
 #ifndef BTE_TESTS_BTE_CPP_H
 #define BTE_TESTS_BTE_CPP_H
 
+#include "bt-embedded/buffer.h"
 #include "bt-embedded/client.h"
 #include "bt-embedded/bte.h"
 #include "bt-embedded/hci.h"
@@ -8,6 +9,8 @@
 #include <any>
 #include <cstring>
 #include <functional>
+#include <iomanip>
+#include <ostream>
 #include <span>
 #include <string>
 #include <tuple>
@@ -30,6 +33,9 @@ template <> struct std::hash<BteBdAddr> {
 /* C++ wrapper for the bt-embedded API. Used for testing, but we might make it
  * part of bt-embedded, if someone needs it. */
 namespace Bte {
+
+class L2cap;
+class L2capServer;
 
 class Buffer: public std::vector<uint8_t> {
 public:
@@ -56,8 +62,62 @@ public:
     }
 };
 
-class L2cap;
-class L2capServer;
+class BufferList {
+public:
+    BufferList(BteBuffer *buffer = nullptr): m_buffer(buffer) {}
+    BufferList(const BufferList &other):
+        m_buffer(bte_buffer_ref(other.m_buffer)) {}
+    BufferList(const std::vector<Buffer> &list):
+        m_buffer(nullptr) {
+        for (const Buffer &b: list)
+            push_back(b);
+    }
+
+    ~BufferList() {
+        if (m_buffer) bte_buffer_unref(m_buffer);
+    }
+
+    void push_back(BteBuffer *buffer) {
+        m_buffer = bte_buffer_append(m_buffer, buffer);
+    }
+
+    void push_back(const Buffer &data) {
+        BteBuffer *b = data.toBuffer();
+        push_back(b);
+        bte_buffer_unref(b);
+    }
+
+    bool operator==(const BufferList &other) const {
+        BteBuffer *a = m_buffer;
+        BteBuffer *b = other.m_buffer;
+        while (a && b) {
+            if (a->size != b->size || memcmp(a->data, b->data, a->size) != 0)
+                return false;
+            a = a->next;
+            b = b->next;
+        }
+        return !a && !b;
+    }
+
+    class Writer {
+    public:
+        Writer() = default;
+
+        bool write(const Buffer &data) {
+            return bte_buffer_writer_write(&m_writer, data.data(), data.size());
+        }
+
+        BufferList end() {
+            return bte_buffer_writer_end(&m_writer);
+        }
+
+    private:
+        friend class L2cap;
+        BteBufferWriter m_writer;
+    };
+
+    BteBuffer *m_buffer;
+};
 
 class Client {
 public:
@@ -740,5 +800,51 @@ private:
 };
 
 } // namespace Bte
+
+inline std::ostream &operator<<(std::ostream &os, const Bte::Buffer &a)
+{
+    os << "Buffer<" << a.size() << ">{";
+    for (size_t i = 0; i < a.size(); i++) {
+        os << std::hex << std::setw(2) << std::setfill('0') << int(a[i]);
+        if (i < a.size() - 1) os << ' ';
+    }
+    os << '}';
+    return os;
+}
+
+inline std::ostream &operator<<(std::ostream &os,
+                                const std::vector<Bte::Buffer> &v)
+{
+    os << "vector{\n";
+    for (const auto &a: v) {
+        os << "  " << a << '\n';
+    }
+    os << '}';
+    return os;
+}
+
+inline std::ostream &operator<<(std::ostream &os, const Bte::BufferList &list)
+{
+    os << "BufferList{\n";
+    for (BteBuffer *b = list.m_buffer; b; b = b->next) {
+        os << "  " << Bte::Buffer(b) << '\n';
+    }
+    os << '}';
+    return os;
+}
+
+namespace Bte {
+
+inline void PrintTo(const std::vector<Buffer> &v, std::ostream *os)
+{
+    *os << v;
+}
+
+inline void PrintTo(const BufferList &v, std::ostream *os)
+{
+    *os << v;
+}
+
+} /* namespace Bte */
 
 #endif /* BTE_TESTS_BTE_CPP_H */
