@@ -20,7 +20,6 @@ Buffer::Buffer(BteBuffer *buffer)
 
 static void buffer_free(BteBuffer *buffer)
 {
-    if (buffer->next) buffer_free(buffer->next);
     delete [] reinterpret_cast<uint8_t*>(buffer);
 }
 
