@@ -71,8 +71,17 @@ public:
                                &L2cap::Callbacks::connect, f);
     }
 
+    L2cap(BteL2cap *l2cap = nullptr): m_l2cap(l2cap) {}
     L2cap(const L2cap &other): m_l2cap(bte_l2cap_ref(other.m_l2cap)) {}
-    ~L2cap() { bte_l2cap_unref(m_l2cap); }
+    ~L2cap() { if (m_l2cap) bte_l2cap_unref(m_l2cap); }
+
+    L2cap &operator=(const L2cap &other) {
+        if (m_l2cap) bte_l2cap_unref(m_l2cap);
+        m_l2cap = bte_l2cap_ref(other.m_l2cap);
+        return *this;
+    }
+
+    bool isValid() const { return m_l2cap != nullptr; }
 
     BteConnHandle connectionHandle() const {
         return bte_l2cap_get_connection_handle(m_l2cap);
@@ -286,7 +295,6 @@ private:
     friend class ::TestL2capFixtureConnected;
     friend class ::TestL2capFixtureConfigured;
     friend class L2capServer;
-    L2cap(BteL2cap *l2cap): m_l2cap(l2cap) {}
 
     struct Callbacks {
         static void onStateChanged(
