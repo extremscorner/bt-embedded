@@ -162,6 +162,28 @@ protected:
                                              continuation));
     }
 
+    void runDefaultConfiguration(Bte::L2cap l2cap) {
+        using L = Bte::L2cap;
+
+        /* Send our request */
+        l2cap.configure({}, [&](const L::ConfigureReply &r) {});
+        ASSERT_EQ(l2cap.state(), BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
+
+        /* Receive a reply */
+        sendConfigResponse(Buffer(), m_cmdId++);
+        bte_handle_events();
+        ASSERT_EQ(l2cap.state(), BTE_L2CAP_WAIT_CONFIG_REQ);
+
+        /* Receive the peer request and reply to it */
+        l2cap.onConfigureRequest([&](const L::ConfigureParams &params) {
+            l2cap.setConfigureReply({});
+        });
+        sendConfigRequest({}, 42);
+        bte_handle_events();
+        ASSERT_EQ(l2cap.state(), BTE_L2CAP_OPEN);
+        m_backend.clear();
+    }
+
     BufferList makeData(const Buffer &data,
                         BteL2capChannelId destCid,
                         uint16_t mtu) {
@@ -310,25 +332,7 @@ class TestL2capFixtureConfigured: public TestL2capFixtureConnected
 protected:
     void SetUp() override {
         TestL2capFixtureConnected::SetUp();
-        using L = Bte::L2cap;
-
-        /* Send our request */
-        m_l2cap->configure({}, [&](const L::ConfigureReply &r) {});
-        ASSERT_EQ(m_l2cap->state(), BTE_L2CAP_WAIT_CONFIG_REQ_RSP);
-
-        /* Receive a reply */
-        sendConfigResponse(Buffer(), m_cmdId++);
-        bte_handle_events();
-        ASSERT_EQ(m_l2cap->state(), BTE_L2CAP_WAIT_CONFIG_REQ);
-
-        /* Receive the peer request and reply to it */
-        m_l2cap->onConfigureRequest([&](const L::ConfigureParams &params) {
-            m_l2cap->setConfigureReply({});
-        });
-        sendConfigRequest({}, 42);
-        bte_handle_events();
-        ASSERT_EQ(m_l2cap->state(), BTE_L2CAP_OPEN);
-        m_backend.clear();
+        runDefaultConfiguration(*m_l2cap);
     }
 
     void TearDown() override {
