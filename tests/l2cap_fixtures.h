@@ -319,10 +319,6 @@ protected:
                                           m_connHandle, m_remoteCid)));
     }
 
-    void TearDown() override {
-        TestL2capFixture::TearDown();
-    }
-
 protected:
     std::unique_ptr<Bte::L2cap> m_l2cap;
 };
@@ -333,10 +329,6 @@ protected:
     void SetUp() override {
         TestL2capFixtureConnected::SetUp();
         runDefaultConfiguration(*m_l2cap);
-    }
-
-    void TearDown() override {
-        TestL2capFixture::TearDown();
     }
 };
 
