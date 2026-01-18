@@ -99,6 +99,41 @@ public:
         return !a && !b;
     }
 
+    struct Iterator {
+        using iterator_category = std::input_iterator_tag;
+        using value_type = Buffer;
+        using difference_type = std::ptrdiff_t;
+
+        Iterator(BteBuffer *buffer = nullptr): m_buffer(buffer) {}
+
+        const Buffer operator*() const noexcept {
+            return m_buffer;
+        }
+
+        Iterator &operator++() noexcept {
+            if (m_buffer) m_buffer = m_buffer->next;
+            return *this;
+        }
+
+        void operator++(int) noexcept {
+            ++(*this);
+        }
+
+        bool operator==(const Iterator &other) const noexcept {
+            return m_buffer == other.m_buffer;
+        }
+
+        bool operator!=(const Iterator &other) const noexcept {
+            return m_buffer != other.m_buffer;
+        }
+
+    private:
+        BteBuffer *m_buffer;
+    };
+
+    Iterator begin() noexcept { return m_buffer; }
+    Iterator end() noexcept { return nullptr; }
+
     class Writer {
     public:
         Writer() = default;
@@ -114,6 +149,27 @@ public:
     private:
         friend class L2cap;
         BteBufferWriter m_writer;
+    };
+
+    class Reader {
+    public:
+        Reader(BteBufferReader &r): m_reader(r) {}
+
+        Buffer readAll() {
+            Buffer buffer(4096);
+            Buffer ret;
+            uint16_t readSize;
+            do {
+                readSize = bte_buffer_reader_read(&m_reader,
+                                                  buffer.data(), buffer.size());
+                std::copy(buffer.begin(), buffer.begin() + readSize,
+                          std::back_inserter(ret));
+            } while (readSize == buffer.size());
+            return ret;
+        }
+
+    private:
+        BteBufferReader m_reader;
     };
 
     BteBuffer *m_buffer;
