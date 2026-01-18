@@ -1189,7 +1189,7 @@ static int acl_incoming_data_check_cb(BteAcl *acl, BteBufferReader *reader)
         }
     }
 
-    return ok ? total_len : -1;
+    return ok ? (total_len + L2CAP_HDR_LEN) : -1;
 }
 
 static void acl_data_received_cb(BteAcl *acl, BteBufferReader *reader)
