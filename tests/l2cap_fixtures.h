@@ -17,6 +17,7 @@ class TestL2capFixture: public testing::Test
 {
 protected:
     using BufferList = Bte::BufferList;
+    using L2cap = Bte::L2cap;
 
     TestL2capFixture() {
         bte_l2cap_reset();
@@ -47,8 +48,9 @@ protected:
     }
 
     Buffer makeConnectResponse(
-        uint8_t reqId, uint16_t result = BTE_L2CAP_CONN_RESP_RES_OK,
-        uint16_t status = BTE_L2CAP_CONN_RESP_STATUS_NO_INFO) {
+        uint8_t reqId,
+        BteL2capChannelId destCid, BteL2capChannelId sourceCid,
+        uint16_t result, uint16_t status) {
         return Buffer{
             low(m_connHandle), uint8_t(0x20 | high(m_connHandle)),
             16, 0, /* Total length */
@@ -57,15 +59,56 @@ protected:
             L2CAP_SIGNAL_CONN_RSP,
             reqId,
             8, 0, /* command length */
-            low(m_remoteCid), high(m_remoteCid), /* dest CID */
-            low(m_localCid), high(m_localCid), /* source CID */
+            low(destCid), high(destCid),
+            low(sourceCid), high(sourceCid),
             low(result), high(result),
             low(status), high(status),
         };
     }
 
+    Buffer makeConnectResponse(
+        uint8_t reqId, uint16_t result = BTE_L2CAP_CONN_RESP_RES_OK,
+        uint16_t status = BTE_L2CAP_CONN_RESP_STATUS_NO_INFO) {
+        return makeConnectResponse(reqId, m_remoteCid, m_localCid,
+                                   result, status);
+    }
+
     void sendConnectResponse(uint8_t reqId) {
         m_backend.sendData(makeConnectResponse(reqId));
+    }
+
+    L2cap connectTo(const BteBdAddr &address, BteL2capPsm psm,
+                    BteConnHandle returnedHandle,
+                    BteL2capChannelId remoteCid) {
+        L2cap newL2cap;
+        auto onConnected = [&newL2cap](std::optional<Bte::L2cap> l2cap,
+                                  const BteL2capConnectionResponse &reply) {
+            ASSERT_TRUE(l2cap.has_value());
+            newL2cap = l2cap.value();
+        };
+        Bte::L2cap::newOutgoing(m_client, address, psm, {}, onConnected);
+        /* Send the statue reply for HCI create connection */
+        uint8_t status = 0;
+        m_backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x5, 0x4});
+        bte_handle_events();
+        /* Send the actual reply */
+        const uint8_t eventSize = 1 + 2 + 6 + 1 + 1;
+        uint8_t link_type = 1;
+        uint8_t enc_mode = 0;
+        m_backend.sendEvent(
+            Buffer{HCI_CONNECTION_COMPLETE, eventSize, status,
+                   low(returnedHandle), high(returnedHandle)} +
+            address + Buffer{link_type, enc_mode});
+        bte_handle_events();
+        m_connections.insert(returnedHandle);
+
+        m_backend.sendData(makeConnectResponse(m_cmdId++,
+                                               remoteCid, m_localCid,
+                                               BTE_L2CAP_CONN_RESP_RES_OK,
+                                               BTE_L2CAP_CONN_RESP_STATUS_NO_INFO));
+        bte_handle_events();
+        m_backend.clear();
+        return newL2cap;
     }
 
     Buffer makeConfigResponse(const Buffer &config, uint8_t reqId,
@@ -249,31 +292,9 @@ protected:
     void SetUp() override {
         TestL2capFixture::SetUp();
         BteBdAddr address = {1, 2, 3, 4, 5, 6};
-        auto onConnected = [this](std::optional<Bte::L2cap> l2cap,
-                                  const BteL2capConnectionResponse &reply) {
-            ASSERT_TRUE(l2cap.has_value());
-            m_l2cap.reset(new Bte::L2cap(l2cap.value()));
-        };
-        Bte::L2cap::newOutgoing(m_client, address, BTE_L2CAP_PSM_SDP,
-                                {}, onConnected);
-        /* Send the statue reply for HCI create connection */
-        uint8_t status = 0;
-        m_backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x5, 0x4});
-        bte_handle_events();
-        /* Send the actual reply */
-        const uint8_t eventSize = 1 + 2 + 6 + 1 + 1;
-        uint8_t link_type = 1;
-        uint8_t enc_mode = 0;
-        m_backend.sendEvent(
-            Buffer{HCI_CONNECTION_COMPLETE, eventSize, status, 0x00, 0x01} +
-            address + Buffer{link_type, enc_mode});
-        bte_handle_events();
         m_connHandle = 0x0100;
-        m_connections.insert(m_connHandle);
-
-        sendConnectResponse(m_cmdId++);
-        bte_handle_events();
-        m_backend.clear();
+        m_l2cap.reset(new L2cap(connectTo(address, BTE_L2CAP_PSM_SDP,
+                                          m_connHandle, m_remoteCid)));
     }
 
     void TearDown() override {
