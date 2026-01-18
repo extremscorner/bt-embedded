@@ -162,6 +162,23 @@ void bte_l2cap_on_configure(
 void bte_l2cap_set_configure_reply(BteL2cap *l2cap,
                                    const BteL2capConfigureReply *reply);
 
+bool bte_l2cap_create_message(BteL2cap *l2cap, BteBufferWriter *writer,
+                              uint16_t size);
+/*!
+ * \param buffer The data to be sent. The library takes ownership of this
+ *        buffer, so if you want to keep it around, add an extra reference to
+ *        it before calling this function.
+ *
+ * \return A negative error code on error, 0 if the packet has been sent, or a
+ *         positive number telling how many packets are in the outgoing queue.
+ */
+int bte_l2cap_send_message(BteL2cap *l2cap, BteBuffer *buffer);
+
+typedef void (*BteL2capMessageReceivedCb)(
+    BteL2cap *l2cap, BteBufferReader *reader, void *userdata);
+void bte_l2cap_on_message_received(BteL2cap *l2cap,
+                                   BteL2capMessageReceivedCb callback);
+
 /* For the reason we reuse the HCI error codes; if a disconnection is requested
  * via the L2CAP protocol, reason is 0x13 (if the peer requested the
  * termination) or 0x16 (if we did). TODO: make these codes public */

@@ -30,6 +30,7 @@ add_executable(test_commands
     test_hci_dev.cpp
     test_l2cap_config.cpp
     test_l2cap_connect.cpp
+    test_l2cap_data.cpp
     test_l2cap_disconnect.cpp
     test_l2cap_server.cpp
 )

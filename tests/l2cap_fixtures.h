@@ -9,12 +9,15 @@
 #include "bt-embedded/client.h"
 #include "bt-embedded/bte.h"
 #include "bt-embedded/l2cap_proto.h"
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <memory>
 
 class TestL2capFixture: public testing::Test
 {
 protected:
+    using BufferList = Bte::BufferList;
+
     TestL2capFixture() {
         bte_l2cap_reset();
     }
@@ -114,6 +117,44 @@ protected:
                            bool continuation = false) {
         m_backend.sendData(makeConfigRequest(config, reqId, m_localCid,
                                              continuation));
+    }
+
+    BufferList makeData(const Buffer &data,
+                        BteL2capChannelId destCid,
+                        uint16_t mtu) {
+        uint16_t totalSize = data.size();
+        uint16_t writtenSize = 0;
+        BufferList list;
+        while (writtenSize < totalSize) {
+            uint16_t sizeMax = writtenSize == 0 ? (mtu - 8) : (mtu - 4);
+            uint16_t chunkLength = std::min(uint16_t(totalSize - writtenSize), sizeMax);
+            Buffer packet;
+            if (writtenSize == 0) {
+                /* First packet */
+                packet = {
+                    0x00, 0x21, /* Connection handle */
+                    low(4 + chunkLength), high(4 + chunkLength), /* Total length */
+                    low(totalSize), high(totalSize), /* L2CAP length */
+                    low(destCid), high(destCid),
+                };
+            } else {
+                packet = {
+                    0x00, 0x11, /* Connection handle */
+                    low(chunkLength), high(chunkLength), /* Total length */
+                };
+            }
+            list.push_back(packet + Buffer(data.begin() + writtenSize,
+                                           data.begin() + writtenSize + chunkLength));
+            writtenSize += chunkLength;
+        }
+        return list;
+    }
+
+    void sendData(const Buffer &data, uint16_t mtu = 348) {
+        BufferList list = makeData(data, m_localCid, mtu);
+        for (const Buffer &b: list) {
+            m_backend.sendData(b);
+        }
     }
 
     Buffer makeHciCreateDisconnection(const BteBdAddr &address,

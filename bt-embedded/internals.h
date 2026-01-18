@@ -97,6 +97,8 @@ struct bte_l2cap_t {
     L2capConfigureData *configure_req; /* Incoming request */
     L2capConfigureData *configure_resp; /* Incoming response */
 
+    BteL2capMessageReceivedCb message_received_cb;
+
     BteL2capDisconnectCb disconnect_cb;
     void *disconnect_userdata;
 

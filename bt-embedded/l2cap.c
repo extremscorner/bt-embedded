@@ -1225,7 +1225,9 @@ static void acl_data_received_cb(BteAcl *acl, BteBufferReader *reader)
             /* TODO double check: no errors should be sent here? */
             return;
         }
-        /* TODO: this message contains data for the client, invoke the callback */
+        if (l2cap->message_received_cb) {
+            l2cap->message_received_cb(l2cap, reader, l2cap->userdata);
+        }
     }
 }
 
@@ -1518,6 +1520,34 @@ void bte_l2cap_disconnect(BteL2cap *l2cap)
                                  l2cap->disconnect_userdata);
         }
     }
+}
+
+bool bte_l2cap_create_message(BteL2cap *l2cap, BteBufferWriter *writer,
+                              uint16_t size)
+{
+    if (UNLIKELY(l2cap->remote_channel_id == BTE_L2CAP_CHANNEL_ID_NULL)) {
+        return false;
+    }
+
+    return acl_l2cap_create_message(L(l2cap->acl), writer, size,
+                                    l2cap->remote_channel_id);
+}
+
+int bte_l2cap_send_message(BteL2cap *l2cap, BteBuffer *buffer)
+{
+    if (UNLIKELY(l2cap->state != BTE_L2CAP_OPEN ||
+                 buffer->total_size > l2cap->remote_mtu)) {
+        bte_buffer_unref(buffer);
+        return -1;
+    }
+    return bte_acl_send_message(l2cap->acl, buffer);
+}
+
+void bte_l2cap_on_message_received(BteL2cap *l2cap,
+                                   BteL2capMessageReceivedCb callback)
+{
+    assert(l2cap != NULL);
+    l2cap->message_received_cb = callback;
 }
 
 void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,

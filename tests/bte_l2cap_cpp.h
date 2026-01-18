@@ -50,6 +50,8 @@ inline bool operator==(const BteL2capConfigExtFlow &a,
 }
 
 class TestL2capConfig;
+class TestL2capFixtureConnected;
+class TestL2capFixtureConfigured;
 
 namespace Bte {
 
@@ -242,6 +244,31 @@ public:
         bte_l2cap_set_configure_reply(m_l2cap, &r);
     }
 
+    bool createMessage(BufferList::Writer &writer, uint16_t size) {
+        return bte_l2cap_create_message(m_l2cap, &writer.m_writer, size);
+    }
+
+    int sendMessage(BufferList &&buffer) {
+        BteBuffer *b = buffer.m_buffer;
+        buffer.m_buffer = nullptr;
+        return bte_l2cap_send_message(m_l2cap, b);
+    }
+
+    int sendMessage(const Buffer &buffer) {
+        BufferList::Writer writer;
+        if (!createMessage(writer, buffer.size())) return -100;
+        if (!writer.write(buffer)) return -200;
+        return sendMessage(writer.end());
+    }
+
+    using MessageReceivedCb = std::function<void(BufferList::Reader &reader)>;
+    void onMessageReceived(const MessageReceivedCb &cb) {
+        m_onMessageReceived = cb;
+        bte_l2cap_set_userdata(m_l2cap, this);
+        bte_l2cap_on_message_received(
+            m_l2cap, &L2cap::Callbacks::onMessageReceived);
+    }
+
     void disconnect() {
         bte_l2cap_disconnect(m_l2cap);
     }
@@ -256,6 +283,8 @@ public:
 
 private:
     friend class ::TestL2capConfig;
+    friend class ::TestL2capFixtureConnected;
+    friend class ::TestL2capFixtureConfigured;
     friend class L2capServer;
     L2cap(BteL2cap *l2cap): m_l2cap(l2cap) {}
 
@@ -297,6 +326,15 @@ private:
                 _this->m_onConfigureRequest(*params);
         }
 
+        static void onMessageReceived(BteL2cap *l2cap, BteBufferReader *reader,
+                                      void *d) {
+            L2cap *_this = static_cast<L2cap*>(d);
+            if (_this->m_onMessageReceived) {
+                BufferList::Reader r(*reader);
+                _this->m_onMessageReceived(r);
+            }
+        }
+
         static void onDisconnected(BteL2cap *l2cap, uint8_t reason, void *d) {
             L2cap *_this = static_cast<L2cap*>(d);
             if (_this->m_onDisconnected)
@@ -307,6 +345,7 @@ private:
     BteL2cap *m_l2cap;
     ConfigureRequestCb m_onConfigureRequest;
     StateChangedCb m_onStateChanged;
+    MessageReceivedCb m_onMessageReceived;
     DisconnectedCb m_onDisconnected;
 };
 
