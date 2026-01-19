@@ -69,6 +69,19 @@ TEST_F(TestL2capData, testSendQueue) {
     ASSERT_EQ(m_backend.sentData(), sentData);
 }
 
+TEST_F(TestL2capData, testSendTooBig) {
+    Buffer data;
+    data.resize(4096);
+    int rc = m_l2cap->sendMessage(data);
+    ASSERT_TRUE(rc < 0);
+}
+
+TEST_F(TestL2capFixtureConnected, testSendNotConfigured) {
+    Buffer data = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    int rc = m_l2cap->sendMessage(data);
+    ASSERT_TRUE(rc < 0);
+}
+
 TEST_F(TestL2capData, testReceiveShort) {
     std::vector<Buffer> receivedData;
     m_l2cap->onMessageReceived([&](BufferList::Reader &reader) {
