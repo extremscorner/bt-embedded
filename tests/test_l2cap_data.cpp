@@ -69,6 +69,28 @@ TEST_F(TestL2capData, testSendQueue) {
     ASSERT_EQ(m_backend.sentData(), sentData);
 }
 
+TEST_F(TestL2capData, testSendQueueLeak) {
+    dummy_driver_set_acl_limits(16, 1);
+    Buffer data = {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25,
+    };
+    int rc = m_l2cap->sendMessage(data);
+    ASSERT_EQ(rc, 0);
+
+    /* Verify that our request is as expected */
+    BufferList sentData = makeData(data, m_remoteCid, 16);
+    std::vector<Buffer> expectedData {
+        *sentData.begin(), /* Only the first buffer */
+    };
+    ASSERT_EQ(m_backend.sentData(), expectedData);
+
+    /* Stop here. The fixture will disconnect the connection, and we want to
+     * verify that no leaks occur: all the buffers queued on this ACL
+     * connection should get released when it gets destroyed.
+     * This test makes only sense when run under valgrind. */
+}
+
 TEST_F(TestL2capData, testSendTooBig) {
     Buffer data;
     data.resize(4096);

@@ -115,6 +115,24 @@ static void bte_acl_disconnected(BteAcl *acl, uint8_t reason)
 {
     BteHciDev *dev = &_bte_hci_dev;
 
+    /* Go through all the pending outgoing buffers and cancel them */
+    BteBuffer *next = dev->outgoing_acl_packets;
+    BteBuffer **prev = &dev->outgoing_acl_packets;
+    for (BteBuffer *b = *prev; b != NULL; b = next) {
+        next = b->next;
+        if (b->size >= BTE_ACL_HDR_LEN) {
+            BteConnHandle handle = read_le16(b->data) & 0x0fff;
+            if (handle == acl->conn_handle) {
+                /* Remove this buffer */
+                *prev = b->next;
+                b->next = NULL;
+                bte_buffer_unref(b);
+                continue;
+            }
+        }
+        prev = &b->next;
+    }
+
     acl->conn_handle = BTE_CONN_HANDLE_INVALID;
     if (acl->disconnected_cb) {
         /* Make sure we don't invoke this twice for the same ACL */
