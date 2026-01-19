@@ -119,6 +119,15 @@ public:
             ++(*this);
         }
 
+        Iterator operator+(int n) const noexcept {
+            BteBuffer *buffer = m_buffer;
+            while (n > 0 && buffer) {
+                buffer = buffer->next;
+                n--;
+            }
+            return buffer;
+        }
+
         bool operator==(const Iterator &other) const noexcept {
             return m_buffer == other.m_buffer;
         }
@@ -133,6 +142,10 @@ public:
 
     Iterator begin() noexcept { return m_buffer; }
     Iterator end() noexcept { return nullptr; }
+
+    const Buffer operator[](int index) {
+        return *(begin() + index);
+    }
 
     class Writer {
     public:
