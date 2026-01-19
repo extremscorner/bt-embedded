@@ -36,7 +36,6 @@ struct bte_acl_t {
      * data */
     int (*incoming_data_check_cb)(BteAcl *acl, BteBufferReader *reader);
     void (*data_received_cb)(BteAcl *acl, BteBufferReader *reader);
-    void (*completed_packets_cb)(BteAcl *acl, int sent_messages);
 };
 
 BteAcl *bte_acl_new(BteHci *hci, const BteBdAddr *address,

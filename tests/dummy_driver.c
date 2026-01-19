@@ -16,4 +16,5 @@ void dummy_driver_set_acl_limits(uint16_t acl_mtu, uint16_t acl_max_packets)
 {
     _bte_hci_dev.acl_mtu = acl_mtu;
     _bte_hci_dev.acl_max_packets = acl_max_packets;
+    _bte_hci_dev.acl_available_packets = acl_max_packets;
 }

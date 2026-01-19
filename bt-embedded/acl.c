@@ -154,11 +154,10 @@ static bool on_disconnection_complete(
 static bool on_nr_of_completed_packets(
     BteHci *hci, const BteHciNrOfCompletedPacketsData *data, void *userdata)
 {
+    /* Consider removing this completely, since it doesn't do anything useful
+     */
     BteAcl *acl = find_acl_by_conn_handle(data->conn_handle);
-    if (!acl) return false;
-
-    acl->completed_packets_cb(acl, data->completed_packets);
-    return true;
+    return acl != NULL;
 }
 
 BteAcl *bte_acl_new(BteHci *hci, const BteBdAddr *address,

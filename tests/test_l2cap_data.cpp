@@ -35,6 +35,40 @@ TEST_F(TestL2capData, testSendFragmented) {
     ASSERT_EQ(m_backend.sentData(), expectedData);
 }
 
+TEST_F(TestL2capData, testSendQueue) {
+    dummy_driver_set_acl_limits(16, 1);
+    Buffer data = {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25,
+    };
+    int rc = m_l2cap->sendMessage(data);
+    ASSERT_EQ(rc, 0);
+
+    /* Verify that our request is as expected */
+    BufferList sentData = makeData(data, m_remoteCid, 16);
+    std::vector<Buffer> expectedData {
+        sentData[0],
+    };
+    ASSERT_EQ(m_backend.sentData(), expectedData);
+
+    /* Now signal that a packet has been completed */
+    Buffer packetDone {HCI_NBR_OF_COMPLETED_PACKETS, 1 + 4 * 1, 1,
+        low(m_connHandle), high(m_connHandle), 1, 0};
+    m_backend.sendEvent(packetDone);
+    bte_handle_events();
+
+    expectedData = {
+        sentData[0],
+        sentData[1],
+    };
+    ASSERT_EQ(m_backend.sentData(), expectedData);
+
+    m_backend.sendEvent(packetDone);
+    bte_handle_events();
+
+    ASSERT_EQ(m_backend.sentData(), sentData);
+}
+
 TEST_F(TestL2capData, testReceiveShort) {
     std::vector<Buffer> receivedData;
     m_l2cap->onMessageReceived([&](BufferList::Reader &reader) {

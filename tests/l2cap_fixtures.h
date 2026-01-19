@@ -28,7 +28,7 @@ protected:
         m_cmdId = 1;
         m_localCid = 0x0040;
         m_remoteCid = 0x004f;
-        dummy_driver_set_acl_limits(600, 2);
+        dummy_driver_set_acl_limits(600, 20);
     }
 
     void TearDown() override {
