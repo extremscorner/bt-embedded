@@ -73,7 +73,7 @@ controller).
 
 BtEmbedded uses the BteBuffer structure (defined in
 [buffer.h](bt-embedded/buffer.h)) for all data transfers between the HCI
-controller and the client. This structure is reference counted linked list of
+controller and the client. This structure is a reference counted linked list of
 buffers: the reference count allows avoiding making copies of the data, because
 the buffers will be freed only when the last reference is dropped.
 
