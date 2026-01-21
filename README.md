@@ -92,11 +92,11 @@ end of the buffer's lifetime.
 The project is built with the GCC's `-ffunction-sections` option, which allows
 the compiler to pick individual functions when linking the library into a
 program; and BtEmbedded itself is written in such a way that the code for
-parsing HCI events is passed to the core only in form a callback, without a
+parsing HCI events is passed to the core only in form of a callback, without a
 direct dependency. In practice, this means that if neither the client nor the
-driver call the `bte_hci_read_local_name()` function, the code to parse the HCI
-"Read Local Name" command result will not be included into the program's
-binary.
+driver call the `bte_hci_read_local_name()` function (for example), the code to
+parse the HCI "Read Local Name" command result will not be included into the
+program's binary.
 
 ### Support for multiple concurrent clients
 
