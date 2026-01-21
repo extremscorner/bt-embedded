@@ -46,6 +46,11 @@ used to send data to the Bluetooth HCI controller, and delivering back HCI
 events to BtEmbedded. The API operates on raw data buffers: the platform
 backend does not need to perform any parsing of the data.
 
+Beside the platform backend code, there's also a `platform_defs.h` file, which
+can be used to specify the alignment requirement for the memory buffers
+exchanged with the HCI controller, and also provide a different implementation
+of malloc/free, if needed.
+
 ### Bluetooth drivers
 
 A Bluetooth driver must bring up the HCI controller to a working state. This
@@ -53,15 +58,16 @@ can be as simple as invoking the HCI Reset command, or can require uploading
 firmware or perform some vendor-specific commands. Drivers operate on the HCI
 controller using the very same API that BtEmbedded provides to external
 clients. However, they have also access to BtEmbedded's internal data
-structures, so they alter some private parameters.
+structures, so they can alter some private parameters.
 
 The reason why the Bluetooth driver is not integrated as part of the platform
 backend is that while on most embedded platform there's a one to one relation
-between platform and HCI controller, there can be platforms which support
-different types of controllers; viceversa, it's also possible that the same
-controller is found on different platforms (in the case of the Nintendo Wii, we
-do have two different platforms, one for the PPC processor and the other one
-for the ARM one, and they both work with the same bluetooth controller).
+between the platform and the HCI controller, there can be platforms which
+support different types of controllers; viceversa, it's also possible that the
+same controller is found on different platforms (in the case of the Nintendo
+Wii, we do have two different platforms, one for the PPC processor and the
+other one for the ARM one, and they both work with the same bluetooth
+controller).
 
 ### Optimizing data transfers
 
@@ -70,6 +76,11 @@ BtEmbedded uses the BteBuffer structure (defined in
 controller and the client. This structure is reference counted linked list of
 buffers: the reference count allows avoiding making copies of the data, because
 the buffers will be freed only when the last reference is dropped.
+
+The `BteBufferReader` and `BteBufferWriter` APIs provide a convenient way to
+read and write data from the BteBuffer lists without having to worry about
+fragmentation and header fields (which are automatically processed), and offer
+direct access to the memory buffer, therefore avoiding unnecessary copies.
 
 The structure definition is public, therefore clients are free to allocate
 buffer as they see fit (statically or dynamically), and its `free_func()`
@@ -103,6 +114,12 @@ client. In cases where properly delivering concurrent messages is impossible,
 BtEmbedded will return an error to the second client, simulating a situation
 where the HCI controller is busy (clients need to be able to handle this
 situation anyway).
+
+### Testability
+
+BtEmbedded comes with a test suite that covers all of its functionality. It's
+also executed under [valgrind](https://valgrind.org/), to detect memory leaks
+and errors.
 
 
 ## Compilation
