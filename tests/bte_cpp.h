@@ -904,6 +904,11 @@ inline std::ostream &operator<<(std::ostream &os, const Bte::BufferList &list)
 
 namespace Bte {
 
+inline void PrintTo(const Buffer &v, std::ostream *os)
+{
+    *os << v;
+}
+
 inline void PrintTo(const std::vector<Buffer> &v, std::ostream *os)
 {
     *os << v;
