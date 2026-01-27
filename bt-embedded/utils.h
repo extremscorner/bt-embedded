@@ -48,6 +48,14 @@ extern "C" {
 #define write_le32(n, ptr) *(uint32_t *)(ptr) = htole32(n)
 #define write_le64(n, ptr) *(uint64_t *)(ptr) = htole64(n)
 
+#define read_be16(ptr) be16toh(*(uint16_t *)(ptr))
+#define read_be32(ptr) be32toh(*(uint32_t *)(ptr))
+#define read_be64(ptr) be64toh(*(uint64_t *)(ptr))
+
+#define write_be16(n, ptr) *(uint16_t *)(ptr) = htobe16(n)
+#define write_be32(n, ptr) *(uint32_t *)(ptr) = htobe32(n)
+#define write_be64(n, ptr) *(uint64_t *)(ptr) = htobe64(n)
+
 static inline void ensure_array_size(void **ptr, size_t elem_size,
                                      int elem_per_block,
                                      int num_elem_curr, int num_elem_added)
