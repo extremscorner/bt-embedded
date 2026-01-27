@@ -26,6 +26,11 @@ add_compile_options(
     ${EXTRA_CFLAGS}
 )
 
+if(BUILD_TESTS AND ENABLE_COVERAGE)
+    include(CodeCoverage)
+    append_coverage_compiler_flags()
+endif()
+
 add_subdirectory(bt-embedded)
 
 if(BUILD_EXAMPLE)

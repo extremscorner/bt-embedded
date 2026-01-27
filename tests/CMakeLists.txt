@@ -7,17 +7,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-set(SRC ${CMAKE_SOURCE_DIR}/bt-embedded)
-set(BTE_SOURCES
-    ${SRC}/acl.c
-    ${SRC}/bte.c
-    ${SRC}/client.c
-    ${SRC}/hci.c
-    ${SRC}/hci_dev.c
-    ${SRC}/l2cap.c
-    ${SRC}/l2cap_server.c
-)
-
 include(GoogleTest)
 
 function(make_test TEST_NAME)
@@ -35,7 +24,6 @@ endfunction()
 # This tests most of the functionality of the library
 #
 add_executable(test_commands
-    ${BTE_SOURCES}
     dummy_driver.c
     mock_backend.cpp
     test_buffer.cpp
@@ -60,7 +48,6 @@ make_test(test_commands)
 # the symbols that are not used.
 #
 add_executable(test_minimal
-    ${BTE_SOURCES}
     dummy_driver.c
     mock_backend.cpp
     test_minimal_l2cap.cpp
@@ -74,9 +61,6 @@ set(UNIT_TESTS
 )
 
 if(ENABLE_COVERAGE)
-    include(CodeCoverage)
-    append_coverage_compiler_flags()
-
     set(COVERAGE_EXCLUDES
         "${CMAKE_SOURCE_DIR}/tests/"
         "${CMAKE_BINARY_DIR}"
