@@ -39,6 +39,7 @@ add_executable(test_commands
     test_l2cap_echo.cpp
     test_l2cap_info.cpp
     test_l2cap_server.cpp
+    test_sdp_de.cpp
 )
 make_test(test_commands)
 
