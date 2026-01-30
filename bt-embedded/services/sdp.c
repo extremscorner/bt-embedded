@@ -85,6 +85,65 @@ static uint8_t var_size(size_t len, int *header_size, uint8_t *dest)
     return size_id;
 }
 
+static ssize_t de_array_size(int count, int type, const void *data)
+{
+    ssize_t size;
+    if ((type >= BTE_SDP_DE_TYPE_NIL && type <= BTE_SDP_DE_TYPE_UUID128) ||
+        type == BTE_SDP_DE_TYPE_BOOL) {
+        /* Fixed length type */
+        uint8_t type_id = type & 0xff;
+        size = bte_sdp_de_get_total_size(&type_id) * count;
+    } else if (type == BTE_SDP_DE_TYPE_STRING || type == BTE_SDP_DE_TYPE_URL) {
+        const char *const *strings = data;
+        size = 0;
+        for (int i = 0; i < count; i++) {
+            size_t len = strlen(strings[i]);
+            int header_size = 0;
+            var_size(len, &header_size, NULL);
+            size += header_size + len;
+        }
+    } else {
+        /* We currently do not support arrays of sequences */
+        assert(false);
+    }
+    return size;
+}
+
+/* This function assumes that there's enough room for storing the array */
+static void de_array_write(uint8_t *de, int count, int type, const void *data)
+{
+    if ((type >= BTE_SDP_DE_TYPE_NIL && type <= BTE_SDP_DE_TYPE_UUID128) ||
+        type == BTE_SDP_DE_TYPE_BOOL) {
+        uint8_t size_id = type & BTE_SDP_DE_SIZE_MASK;
+        /* Fixed size: we need to copy the data paying attention to the
+         * endianness */
+        const uint8_t *src = data;
+        int size = 1 << size_id;
+        for (int i = 0; i < count; i++) {
+            *(de++) = type;
+            for (int j = 0; j < size; j++) {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+                *(de++) = src[size - 1 - j];
+#else
+                *(de++) = src[j];
+#endif
+            }
+            src += size;
+        }
+    } else if (type == BTE_SDP_DE_TYPE_STRING || type == BTE_SDP_DE_TYPE_URL) {
+        const char *const *strings = data;
+        for (int i = 0; i < count; i++) {
+            size_t len = strlen(strings[i]);
+            int header_size = 0;
+            uint8_t size_id = var_size(len, &header_size, de);
+            de[0] = type | size_id;
+            de += header_size;
+            strcpy((char *)de, strings[i]);
+            de += len;
+        }
+    }
+}
+
 static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
 {
     uint32_t size = 0;
@@ -206,6 +265,18 @@ static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
                 va_end(args_copy);
             }
             break;
+        default:
+            if ((type & BTE_SDP_DE_SPECIAL_MASK) == BTE_SDP_DE_SPECIAL_ARRAY) {
+                int count = type & (~BTE_SDP_DE_SPECIAL_MASK);
+                type = va_arg(*args, int);
+                /* We assume that the caller is sane and specifies a basic type
+                 */
+                void *elements = va_arg(*args, void *);
+                req_size = de_array_size(count, type, elements);
+                if (remaining > req_size) {
+                    de_array_write(dest, count, type, elements);
+                }
+            }
         }
         if (dest) dest += req_size;
         size += req_size;

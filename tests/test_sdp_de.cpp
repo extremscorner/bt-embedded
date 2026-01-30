@@ -187,3 +187,55 @@ TEST_F(TestSdpDeFixture, testWriteLarge)
     EXPECT_EQ(buffer, expected);
 }
 
+TEST_F(TestSdpDeFixture, testWriteSequenceArrayInt8)
+{
+    int8_t numbers[] = { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+    uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
+                                     BTE_SDP_DE_TYPE_SEQUENCE,
+                                     BTE_SDP_DE_ARRAY(10),
+                                     BTE_SDP_DE_TYPE_INT8, numbers,
+                                     -1, -1);
+    buffer.resize(size);
+    Buffer expected = {
+        0x35, 20,
+        0x10, 10, 0x10, 20, 0x10, 30, 0x10, 40, 0x10, 50,
+        0x10, 60, 0x10, 70, 0x10, 80, 0x10, 90, 0x10, 100,
+    };
+    EXPECT_EQ(buffer, expected);
+}
+
+TEST_F(TestSdpDeFixture, testWriteSequenceArrayUint32)
+{
+    uint32_t numbers[] = { 0x11223344, 0x55667788, 0x99001122 };
+    uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
+                                     BTE_SDP_DE_TYPE_SEQUENCE,
+                                     BTE_SDP_DE_ARRAY(3),
+                                     BTE_SDP_DE_TYPE_UINT32, numbers,
+                                     -1, -1);
+    buffer.resize(size);
+    Buffer expected = {
+        0x35, 15,
+        0x0a, 0x11, 0x22, 0x33, 0x44,
+        0x0a, 0x55, 0x66, 0x77, 0x88,
+        0x0a, 0x99, 0x00, 0x11, 0x22,
+    };
+    EXPECT_EQ(buffer, expected);
+}
+
+TEST_F(TestSdpDeFixture, testWriteSequenceArrayStrings)
+{
+    const char *strings[] = { "Hi", "From", "Me" };
+    uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
+                                     BTE_SDP_DE_TYPE_SEQUENCE,
+                                     BTE_SDP_DE_ARRAY(3),
+                                     BTE_SDP_DE_TYPE_STRING, strings,
+                                     -1, -1);
+    buffer.resize(size);
+    Buffer expected = {
+        0x35, 14,
+        0x25, 2, 'H', 'i',
+        0x25, 4, 'F', 'r', 'o', 'm',
+        0x25, 2, 'M', 'e',
+    };
+    EXPECT_EQ(buffer, expected);
+}

@@ -38,6 +38,9 @@ typedef struct {
 #define BTE_SDP_DE_TYPE_URL       (BteSdpDeType)(8 << 3)
 
 #define BTE_SDP_DE_END (-1)
+#define BTE_SDP_DE_SPECIAL_MASK   0xff000000
+#define BTE_SDP_DE_SPECIAL_ARRAY  0xaa000000
+#define BTE_SDP_DE_ARRAY(n)       (n | BTE_SDP_DE_SPECIAL_ARRAY)
 
 uint32_t bte_sdp_de_get_data_size(const uint8_t *de);
 uint32_t bte_sdp_de_get_header_size(const uint8_t *de);
