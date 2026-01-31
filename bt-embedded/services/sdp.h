@@ -52,6 +52,42 @@ BteSdpDeType bte_sdp_de_get_type(const uint8_t *de);
  * the size needed for storing the data element */
 uint32_t bte_sdp_de_write(uint8_t *de, size_t buffer_size, ...);
 
+typedef struct bte_sdp_client_t BteSdpClient;
+
+/* Note: this replaces the l2cap's userdata with its own; the l2cap userdata is
+ * moved into the SdpClient's userdata.
+ * \sa bte_sdp_client_get_userdata */
+BteSdpClient *bte_sdp_client_new(BteL2cap *l2cap);
+
+BteSdpClient *bte_sdp_client_ref(BteSdpClient *sdp);
+void bte_sdp_client_unref(BteSdpClient *sdp);
+
+void bte_sdp_client_set_userdata(BteSdpClient *sdp, void *userdata);
+void *bte_sdp_client_get_userdata(BteSdpClient *sdp);
+
+BteL2cap *bte_sdp_client_get_l2cap(BteSdpClient *sdp);
+
+typedef struct {
+    uint16_t error_code;
+    uint16_t total_count;
+    uint16_t count; /* In the current reply */
+    bool has_more;
+    const uint32_t *handles;
+} BteSdpServiceSearchReply;
+
+typedef bool (*BteSdpServiceSearchCb)(BteSdpClient *sdp,
+                                      const BteSdpServiceSearchReply *reply,
+                                      void *userdata);
+bool bte_sdp_service_search_req(BteSdpClient *sdp, const uint8_t *pattern,
+                                uint16_t max_count,
+                                BteSdpServiceSearchCb cb, void *userdata);
+bool bte_sdp_service_search_req_uuid16(
+    BteSdpClient *sdp, uint16_t *uuids, int n_uuids, uint16_t max_count,
+    BteSdpServiceSearchCb cb, void *userdata);
+
+/* For testing only */
+void bte_sdp_reset();
+
 #ifdef __cplusplus
 }
 #endif

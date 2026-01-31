@@ -71,6 +71,7 @@ class TestL2capFixtureConfigured;
 namespace Bte {
 
 class L2capServer;
+class SdpClient;
 
 class L2cap {
 public:
@@ -330,6 +331,7 @@ private:
     friend class ::TestL2capFixtureConnected;
     friend class ::TestL2capFixtureConfigured;
     friend class L2capServer;
+    friend class SdpClient;
 
     struct Callbacks {
         static void onStateChanged(

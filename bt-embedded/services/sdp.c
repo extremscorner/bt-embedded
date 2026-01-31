@@ -1,5 +1,7 @@
 #include "sdp.h"
 
+#include "buffer.h"
+#include "l2cap.h"
 #include "logging.h"
 #include "utils.h"
 
@@ -16,6 +18,39 @@
 #define BTE_SDP_DE_SIZE_VAR_16 6
 #define BTE_SDP_DE_SIZE_VAR_32 7
 
+#define PDU_HEADER_SIZE (1 + 2 + 2)
+
+#define PDU_ID_ERROR_RSP               0x01
+#define PDU_ID_SERVICE_SEARCH_REQ      0x02
+#define PDU_ID_SERVICE_SEARCH_RSP      0x03
+#define PDU_ID_SERVICE_ATTR_REQ        0x04
+#define PDU_ID_SERVICE_ATTR_RSP        0x05
+#define PDU_ID_SERVICE_SEARCH_ATTR_REQ 0x06
+#define PDU_ID_SERVICE_SEARCH_ATTR_RSP 0x07
+
+/* The offsets are relative to the raw ACL packet */
+#define PDU_OFFSET_OPCODE     8
+#define PDU_OFFSET_TRANS_ID   9
+#define PDU_OFFSET_PARAM_LEN 11
+#define PDU_OFFSET_PARAMS    13
+
+struct bte_sdp_client_t {
+    atomic_int ref_count;
+    void *userdata;
+
+    BteL2cap *l2cap;
+
+    BteBuffer *last_req;
+    uint16_t continuation_offset;
+
+    union _bte_sdp_client_last_async_req_u {
+        struct {
+            BteSdpServiceSearchCb cb;
+            void *userdata;
+        } service_search;
+    } req_data;
+};
+
 static const BteSdpDeUuid128 s_base_uuid = {{
     0x00, 0x00, 0x00, 0x00,
     0x00, 0x00,
@@ -23,6 +58,13 @@ static const BteSdpDeUuid128 s_base_uuid = {{
     0x80, 0x00,
     0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb
 }};
+
+static uint32_t s_next_transaction_id = 0;
+
+static inline uint16_t next_transaction_id()
+{
+    return s_next_transaction_id++;
+}
 
 uint32_t bte_sdp_de_get_data_size(const uint8_t *de)
 {
@@ -66,6 +108,20 @@ BteSdpDeType bte_sdp_de_get_type(const uint8_t *de)
     return type_id >= BTE_SDP_DE_TYPE_STRING ? type_id : de[0];
 }
 
+static uint16_t cont_state_len(const uint8_t *cont_state)
+{
+    return 1 + (cont_state ? cont_state[0] : 0);
+}
+
+static bool write_cont_state(BteBufferWriter *writer,
+                             const uint8_t *cont_state)
+{
+    static uint8_t nil = 0;
+    return bte_buffer_writer_write(writer,
+                                   cont_state ? cont_state : &nil,
+                                   1 + (cont_state ? cont_state[0] : 0));
+}
+
 static uint8_t var_size(size_t len, int *header_size, uint8_t *dest)
 {
     uint8_t size_id;
@@ -105,6 +161,7 @@ static ssize_t de_array_size(int count, int type, const void *data)
     } else {
         /* We currently do not support arrays of sequences */
         assert(false);
+        size = 0; /* Make the compiler happy */
     }
     return size;
 }
@@ -293,4 +350,269 @@ uint32_t bte_sdp_de_write(uint8_t *de, size_t buffer_size, ...)
     uint32_t size = de_write(de, buffer_size, &args);
     va_end(args);
     return size;
+}
+
+static bool create_pdu(BteL2cap *l2cap, BteBufferWriter *writer,
+                       uint8_t code, uint16_t id, uint16_t param_len)
+{
+    bool ok = bte_l2cap_create_message(l2cap, writer,
+                                       PDU_HEADER_SIZE + param_len);
+    if (UNLIKELY(!ok)) return false;
+
+    uint8_t *hdr = bte_buffer_writer_ptr_n(writer, PDU_HEADER_SIZE);
+    hdr[0] = code;
+    write_be16(id, hdr + 1);
+    write_be16(param_len, hdr + 3);
+    return true;
+}
+
+static bool send_continuation_request(BteSdpClient *sdp,
+                                      const uint8_t *cont_state)
+{
+    uint8_t req_opcode = sdp->last_req->data[PDU_OFFSET_OPCODE];
+
+    uint16_t data_len = sdp->continuation_offset;
+    uint16_t size = data_len + cont_state_len(cont_state);
+    BteBufferWriter writer;
+    bool ok = create_pdu(sdp->l2cap, &writer, req_opcode,
+                         next_transaction_id(), size);
+    if (UNLIKELY(!ok)) return false;
+
+    void *dest = bte_buffer_writer_ptr_n(&writer, sdp->continuation_offset);
+    memcpy(dest, sdp->last_req->data + PDU_OFFSET_PARAMS, data_len);
+    ok = write_cont_state(&writer, cont_state);
+    if (UNLIKELY(!ok)) goto error;
+
+    bte_buffer_unref(sdp->last_req);
+    sdp->last_req = bte_buffer_ref(bte_buffer_writer_end(&writer));
+    int rc = bte_l2cap_send_message(sdp->l2cap, sdp->last_req);
+    return rc >= 0;
+
+error:
+    bte_buffer_unref(writer.buffer);
+    return NULL;
+}
+
+static bool parse_service_search_reply(
+    uint8_t *params, uint16_t param_len, BteSdpServiceSearchReply *reply,
+    uint8_t **cont_state)
+{
+    if (UNLIKELY(param_len < 4)) return false;
+
+    uint16_t remaining = param_len;
+    reply->total_count = read_be16(params);
+    reply->count = read_be16(params + 2);
+    uint16_t read = 4;
+    remaining -= read;
+    params += read;
+
+    if (UNLIKELY(remaining < reply->count * 4)) return false;
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    for (int i = 0; i < reply->count; i++) {
+        /* We modify the data in place */
+        uint32_t handle = read_be32(params + i * 4);
+        *(uint32_t*)(params + i * 4) = handle;
+    }
+#endif
+    reply->handles = (uint32_t*)params;
+    read = reply->count * 4;
+    params += read;
+    remaining -= read;
+
+    if (UNLIKELY(remaining < 1)) return false;
+    uint16_t len = cont_state_len(params);
+    if (UNLIKELY(len > 17 || len > remaining)) return false;
+
+    *cont_state = params;
+    reply->has_more = params[0] != 0;
+    return true;
+}
+
+static void on_message_received(BteL2cap *l2cap, BteBufferReader *reader,
+                                void *userdata)
+{
+    BteSdpClient *sdp = userdata;
+
+    if (UNLIKELY(!sdp->last_req)) {
+        /* Unsolicited message, ignore it */
+        return;
+    }
+
+    uint8_t req_opcode = sdp->last_req->data[PDU_OFFSET_OPCODE];
+    /* This is in BE format, but here we don't care, since we will be comparing
+     * the raw values */
+    uint16_t req_id = *(uint16_t*)(sdp->last_req->data + PDU_OFFSET_TRANS_ID);
+
+    uint8_t *hdr = bte_buffer_reader_read_n(reader, PDU_HEADER_SIZE);
+    uint8_t rsp_opcode = hdr[0];
+    uint16_t rsp_id = *(uint16_t*)(hdr + 1);
+    if (rsp_id != req_id ||
+        (rsp_opcode != req_opcode + 1 && rsp_opcode != PDU_ID_ERROR_RSP)) {
+        /* The incoming message does not match our request: ignore it */
+        return;
+    }
+
+    uint16_t error_code = 0;
+    if (UNLIKELY(rsp_opcode == PDU_ID_ERROR_RSP)) {
+        uint8_t *params = bte_buffer_reader_read_n(reader, 2);
+        error_code = read_be16(params);
+        if (UNLIKELY(error_code == 0)) {
+            /* Invalid packet, ignore it */
+            return;
+        }
+    }
+
+    uint16_t param_len = read_be16(hdr + 3);
+    uint8_t *params = bte_buffer_reader_read_n(reader, param_len);
+    if (UNLIKELY(!params)) return;
+
+    uint8_t *cont_state = NULL;
+    bool req_complete = false;
+    if (req_opcode == PDU_ID_SERVICE_SEARCH_REQ) {
+        BteSdpServiceSearchCb cb = sdp->req_data.service_search.cb;
+
+        BteSdpServiceSearchReply reply;
+        reply.error_code = error_code;
+        if (UNLIKELY(error_code != 0)) {
+            reply.total_count = reply.count = 0;
+            reply.has_more = false;
+            reply.handles = NULL;
+            req_complete = true;
+        } else {
+            bool ok = parse_service_search_reply(params, param_len,
+                                                 &reply, &cont_state);
+            if (UNLIKELY(!ok)) return;
+            req_complete = !reply.has_more;
+        }
+        bool wants_more =
+            cb(sdp, &reply, sdp->req_data.service_search.userdata);
+        if (!wants_more) req_complete = true;
+    }
+
+    if (req_complete) {
+        bte_buffer_unref(sdp->last_req);
+        sdp->last_req = NULL;
+    } else {
+        send_continuation_request(sdp, cont_state);
+    }
+}
+
+static void bte_sdp_client_free(BteSdpClient *sdp)
+{
+    bte_l2cap_unref(sdp->l2cap);
+    bte_free(sdp);
+}
+
+BteSdpClient *bte_sdp_client_new(BteL2cap *l2cap)
+{
+    BteSdpClient *sdp = bte_malloc(sizeof(BteSdpClient));
+    memset(sdp, 0, sizeof(BteSdpClient));
+    sdp->ref_count = 1;
+    sdp->l2cap = bte_l2cap_ref(l2cap);
+    sdp->userdata = bte_l2cap_get_userdata(l2cap);
+    bte_l2cap_set_userdata(l2cap, sdp);
+    bte_l2cap_on_message_received(l2cap, on_message_received);
+    return sdp;
+}
+
+BteSdpClient *bte_sdp_client_ref(BteSdpClient *sdp)
+{
+    atomic_fetch_add(&sdp->ref_count, 1);
+    return sdp;
+}
+
+void bte_sdp_client_unref(BteSdpClient *sdp)
+{
+    if (atomic_fetch_sub(&sdp->ref_count, 1) == 1) {
+        bte_sdp_client_free(sdp);
+    }
+}
+
+void bte_sdp_client_set_userdata(BteSdpClient *sdp, void *userdata)
+{
+    sdp->userdata = userdata;
+}
+
+void *bte_sdp_client_get_userdata(BteSdpClient *sdp)
+{
+    return sdp->userdata;
+}
+
+
+BteL2cap *bte_sdp_client_get_l2cap(BteSdpClient *sdp)
+{
+    return sdp->l2cap;
+}
+
+static BteBuffer *service_search_req_packet(
+    BteSdpClient *sdp, const uint8_t *pattern, uint16_t max_count,
+    uint8_t *cont_state)
+{
+    uint32_t pattern_size = bte_sdp_de_get_total_size(pattern);
+    uint16_t size = pattern_size + 2 + cont_state_len(cont_state);
+
+    BteBufferWriter writer;
+    bool ok = create_pdu(sdp->l2cap, &writer, PDU_ID_SERVICE_SEARCH_REQ,
+                         next_transaction_id(), size);
+    if (UNLIKELY(!ok)) return NULL;
+
+    ok = bte_buffer_writer_write(&writer, pattern, pattern_size);
+    if (UNLIKELY(!ok)) goto error;
+
+    uint16_t max_count_be = htobe16(max_count);
+    ok = bte_buffer_writer_write(&writer, &max_count_be, sizeof(max_count_be));
+    if (UNLIKELY(!ok)) goto error;
+
+    sdp->continuation_offset = pattern_size + 2;
+    ok = write_cont_state(&writer, cont_state);
+    if (UNLIKELY(!ok)) goto error;
+
+    return bte_buffer_writer_end(&writer);
+
+error:
+    bte_buffer_unref(writer.buffer);
+    return NULL;
+}
+
+bool bte_sdp_service_search_req(BteSdpClient *sdp, const uint8_t *pattern,
+                                uint16_t max_count,
+                                BteSdpServiceSearchCb cb, void *userdata)
+{
+    if (sdp->last_req) return false;
+
+    BteBuffer *buffer =
+        service_search_req_packet(sdp, pattern, max_count, NULL);
+    if (UNLIKELY(!buffer)) return false;
+
+    sdp->last_req = bte_buffer_ref(buffer);
+    int rc = bte_l2cap_send_message(sdp->l2cap, buffer);
+    if (UNLIKELY(rc < 0)) {
+        bte_buffer_unref(sdp->last_req);
+        sdp->last_req = NULL;
+        return false;
+    }
+
+    sdp->req_data.service_search.cb = cb;
+    sdp->req_data.service_search.userdata = userdata;
+    return true;
+}
+
+bool bte_sdp_service_search_req_uuid16(
+    BteSdpClient *sdp, uint16_t *uuids, int n_uuids, uint16_t max_count,
+    BteSdpServiceSearchCb cb, void *userdata)
+{
+    uint8_t buffer[32];
+
+    if (UNLIKELY(n_uuids > 12)) return false;
+    bte_sdp_de_write(buffer, sizeof(buffer), BTE_SDP_DE_TYPE_SEQUENCE,
+                     BTE_SDP_DE_ARRAY(n_uuids), BTE_SDP_DE_TYPE_UUID16,
+                     uuids, BTE_SDP_DE_END, BTE_SDP_DE_END);
+
+    return bte_sdp_service_search_req(sdp, buffer, max_count, cb, userdata);
+}
+
+void bte_sdp_reset()
+{
+    s_next_transaction_id = 0;
 }
