@@ -239,3 +239,315 @@ TEST_F(TestSdpDeFixture, testWriteSequenceArrayStrings)
     };
     EXPECT_EQ(buffer, expected);
 }
+
+TEST_F(TestSdpDeFixture, testRead8)
+{
+    buffer = {0x10, 0xf1};
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INT8);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 0xf1);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0xf1);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0xf1);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0xf1);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint64(&reader), 0xf1);
+
+    EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), -15);
+    EXPECT_EQ(bte_sdp_de_reader_read_int16(&reader), -15);
+    EXPECT_EQ(bte_sdp_de_reader_read_int32(&reader), -15);
+    EXPECT_EQ(bte_sdp_de_reader_read_int64(&reader), -15);
+
+#ifdef __SIZEOF_INT128__
+    EXPECT_EQ(bte_sdp_de_reader_read_uint128(&reader), 0xf1);
+    EXPECT_EQ(bte_sdp_de_reader_read_int128(&reader), -15);
+#endif
+}
+
+TEST_F(TestSdpDeFixture, testRead16)
+{
+    buffer = {0x09, 0x11, 0x22};
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT16);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0x1122);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0x1122);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0x1122);
+
+    /* But we cannot read a uint8 out of this */
+    EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 0);
+
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
+}
+
+TEST_F(TestSdpDeFixture, testRead32)
+{
+    buffer = {0x12, 0x88, 0x77, 0x66, 0x55};
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INT32);
+    EXPECT_EQ(bte_sdp_de_reader_read_int32(&reader), -2005440939);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0x88776655);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid32(&reader), 0x88776655);
+
+    /* But we cannot read a uint16 out of this */
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0);
+}
+
+TEST_F(TestSdpDeFixture, testRead64)
+{
+    buffer = {0x0b, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11};
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT64);
+    EXPECT_EQ(bte_sdp_de_reader_read_int64(&reader), -8613303245920329199);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint64(&reader), 0x8877665544332211);
+
+    /* But we cannot read a smaller type out of this */
+    EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int32(&reader), 0);
+}
+
+TEST_F(TestSdpDeFixture, testRead128)
+{
+    buffer = {
+        0x14, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
+        1, 2, 3, 4, 5, 6, 7, 8,
+    };
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INT128);
+    BteSdpInt128 v128;
+    BteSdpUint128 v128_u;
+    uint64_t low = 0x0102030405060708;
+    uint64_t high = 0x8877665544332211;
+    uint64_t *parts = (uint64_t*)&v128;
+    uint64_t *parts_u = (uint64_t*)&v128_u;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    parts[0] = parts_u[0] = low;
+    parts[1] = parts_u[1] = high;
+#else
+    parts[1] = parts_u[1] = low;
+    parts[0] = parts_u[0] = high;
+#endif
+    EXPECT_EQ(bte_sdp_de_reader_read_uint128(&reader), v128_u);
+    EXPECT_EQ(bte_sdp_de_reader_read_int128(&reader), v128);
+
+    /* But we cannot read a smaller type out of this */
+    EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint64(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int32(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int64(&reader), 0);
+}
+
+TEST_F(TestSdpDeFixture, testReadUuid16)
+{
+    buffer = { 0x19, 0xaa, 0xbb };
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID16);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0xaabb);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid32(&reader), 0xaabb);
+
+    BteSdpDeUuid128 uuid = {
+        0x00, 0x00, 0xaa, 0xbb,
+        0x00, 0x00,
+        0x10, 0x00,
+        0x80, 0x00,
+        0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb
+    };
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid128(&reader), uuid);
+}
+
+TEST_F(TestSdpDeFixture, testReadUuid128)
+{
+    buffer = {
+        0x1c, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
+        1, 2, 3, 4, 5, 6, 7, 8,
+    };
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID128);
+    BteSdpDeUuid128 uuid = {
+        0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11,
+        1, 2, 3, 4, 5, 6, 7, 8,
+    };
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid128(&reader), uuid);
+
+    /* But we cannot read a smaller type out of this */
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid32(&reader), 0);
+}
+
+TEST_F(TestSdpDeFixture, testReadString)
+{
+    buffer = {0x45, 11, 'f', 'i', 'l', 'e', ':', 'b', 't', '.', 't', 'x', 't'};
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_URL);
+    char text[20];
+    size_t len = bte_sdp_de_reader_copy_str(&reader, text, sizeof(text));
+    EXPECT_EQ(len, 11);
+    EXPECT_STREQ(text, "file:bt.txt");
+
+    /* Now try reding it into a smaller buffer */
+    char small[8];
+    len = bte_sdp_de_reader_copy_str(&reader, small, sizeof(small));
+    EXPECT_EQ(len, 11);
+    EXPECT_STREQ(small, "file:bt");
+
+    /* And see what happens if we try to read a string out of other data */
+    buffer = {0x12, 0x88, 0x77, 0x66, 0x55};
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INT32);
+    len = bte_sdp_de_reader_copy_str(&reader, text, sizeof(text));
+    EXPECT_EQ(len, 0);
+    EXPECT_STREQ(text, "");
+}
+
+TEST_F(TestSdpDeFixture, testReadSequence)
+{
+    uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
+        BTE_SDP_DE_TYPE_SEQUENCE,
+            BTE_SDP_DE_TYPE_BOOL, false,
+            BTE_SDP_DE_TYPE_SEQUENCE,
+                BTE_SDP_DE_TYPE_UINT16, 0x1234,
+                BTE_SDP_DE_TYPE_INT16, -200,
+            BTE_SDP_DE_END,
+            BTE_SDP_DE_TYPE_SEQUENCE,
+                BTE_SDP_DE_TYPE_UUID32, 0x11223344,
+                BTE_SDP_DE_TYPE_UUID16, 0x5566,
+                BTE_SDP_DE_TYPE_CHOICE,
+                    BTE_SDP_DE_TYPE_STRING, "yes",
+                    BTE_SDP_DE_TYPE_STRING, "no",
+                BTE_SDP_DE_END,
+                BTE_SDP_DE_TYPE_INT8, -1,
+            BTE_SDP_DE_END,
+        BTE_SDP_DE_END,
+        BTE_SDP_DE_TYPE_UINT8, 42,
+        BTE_SDP_DE_END);
+    buffer.resize(size);
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_BOOL);
+    EXPECT_EQ(bte_sdp_de_reader_read_bool(&reader), false);
+    EXPECT_FALSE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+    /* We don't enter this one */
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID32);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid32(&reader), 0x11223344);
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID16);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0x5566);
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_CHOICE);
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_STRING);
+    char text[10];
+    size_t len = bte_sdp_de_reader_copy_str(&reader, text, sizeof(text));
+    EXPECT_EQ(len, 3);
+    EXPECT_STREQ(text, "yes");
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_STRING);
+    len = bte_sdp_de_reader_copy_str(&reader, text, sizeof(text));
+    EXPECT_EQ(len, 2);
+    EXPECT_STREQ(text, "no");
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INT8);
+    EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), -1);
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INVALID);
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT8);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 42);
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_FALSE(bte_sdp_de_reader_leave(&reader));
+}
+
+TEST_F(TestSdpDeFixture, testReadSequenceLeaveEarly)
+{
+    uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
+        BTE_SDP_DE_TYPE_SEQUENCE,
+            BTE_SDP_DE_TYPE_BOOL, false,
+            BTE_SDP_DE_TYPE_SEQUENCE,
+                BTE_SDP_DE_TYPE_UINT16, 0x1234,
+                BTE_SDP_DE_TYPE_INT16, -200,
+            BTE_SDP_DE_END,
+            BTE_SDP_DE_TYPE_SEQUENCE,
+                BTE_SDP_DE_TYPE_UUID32, 0x11223344,
+                BTE_SDP_DE_TYPE_UUID16, 0x5566,
+                BTE_SDP_DE_TYPE_CHOICE,
+                    BTE_SDP_DE_TYPE_STRING, "yes",
+                    BTE_SDP_DE_TYPE_STRING, "no",
+                BTE_SDP_DE_END,
+                BTE_SDP_DE_TYPE_INT8, -1,
+            BTE_SDP_DE_END,
+        BTE_SDP_DE_END,
+        BTE_SDP_DE_TYPE_UINT8, 42,
+        BTE_SDP_DE_END);
+    buffer.resize(size);
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_BOOL);
+    EXPECT_FALSE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT16);
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID32);
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID16);
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INVALID);
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT8);
+    EXPECT_FALSE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
+}
