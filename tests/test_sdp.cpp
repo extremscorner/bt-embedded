@@ -23,15 +23,11 @@ protected:
     Buffer makeSdpMsg(BteL2capChannelId destCid,
                       uint16_t reqId, uint8_t pduId, const Buffer &params) {
         uint16_t size = params.size();
-        return Buffer{
-            low(m_connHandle), uint8_t(0x20 | high(m_connHandle)),
-            low(9 + size), high(9 + size), /* Total length */
-            low(5 + size), high(5 + size), /* L2CAP length */
-            low(destCid), high(destCid),
+        return makeL2capMessage(m_connHandle, destCid, Buffer{
             pduId,
             high(reqId), low(reqId),
             high(size), low(size),
-        } + params;
+        } + params);
     }
 
     Buffer makeServiceSearchReq(uint16_t reqId, const Buffer &pattern,

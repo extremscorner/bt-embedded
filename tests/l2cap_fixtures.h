@@ -51,15 +51,24 @@ protected:
         return (v >> (index * 8)) & 0xff;
     }
 
+    Buffer makeL2capMessage(BteConnHandle connHandle,
+                            BteL2capChannelId channelId,
+                            const Buffer &data,
+                            uint8_t flags = 0x20) {
+        uint16_t size = data.size();
+        return Buffer{
+            low(connHandle), uint8_t(flags | high(connHandle)),
+            low(size + 4), high(size + 4),
+            low(size), high(size),
+            low(channelId), high(channelId),
+        } + data;
+    }
+
     Buffer makeConnectResponse(
         uint8_t reqId,
         BteL2capChannelId destCid, BteL2capChannelId sourceCid,
         uint16_t result, uint16_t status) {
-        return Buffer{
-            low(m_connHandle), uint8_t(0x20 | high(m_connHandle)),
-            16, 0, /* Total length */
-            12, 0, /* L2CAP length */
-            0x01, 0x00, /* Signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_CONN_RSP,
             reqId,
             8, 0, /* command length */
@@ -67,7 +76,7 @@ protected:
             low(sourceCid), high(sourceCid),
             low(result), high(result),
             low(status), high(status),
-        };
+        });
     }
 
     Buffer makeConnectResponse(
@@ -121,18 +130,14 @@ protected:
                               bool continuation = false) {
         uint8_t confSize = config.size();
         uint16_t flags = continuation ? L2CAP_CONFIG_FLAG_CONTINUATION : 0;
-        return Buffer{
-            0x00, 0x21, /* Connection handle */
-            low(14 + confSize), high(14 + confSize), /* Total length */
-            low(10 + confSize), high(10 + confSize), /* L2CAP length */
-            0x01, 0x00, /* Signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_CONFIG_RSP,
             reqId,
             low(6 + confSize), high(6 + confSize), /* command length */
             low(sourceCid), high(sourceCid),
             low(flags), high(flags), /* flags */
             low(result), high(result), /* result */
-            } + config;
+            } + config);
     }
 
     void sendConfigResponse(const Buffer &config, uint8_t reqId,
@@ -147,17 +152,13 @@ protected:
                              bool continuation = false) {
         uint8_t confSize = config.size();
         uint16_t flags = continuation ? L2CAP_CONFIG_FLAG_CONTINUATION : 0;
-        return Buffer{
-            0x00, 0x21, /* 0x100 handle + flushable flag */
-            low(12 + confSize), high(12 + confSize), /* Total length */
-            low(8 + confSize), high(8 + confSize), /* L2CAP length */
-            0x01, 0x00, /* signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_CONFIG_REQ,
             reqId,
             low(4 + confSize), high(4 + confSize), /* cmd length */
             low(destCid), high(destCid),
             low(flags), high(flags), /* flags (continuation) */
-        } + config;
+        } + config);
     }
 
     void sendConfigRequest(const Buffer &config, uint8_t reqId,
@@ -228,15 +229,11 @@ protected:
 
     Buffer makeEchoSignal(uint8_t code, const Buffer &data, uint8_t reqId) {
         uint8_t dataSize = data.size();
-        return Buffer{
-            0x00, 0x21, /* 0x100 handle + flushable flag */
-            low(8 + dataSize), high(8 + dataSize), /* Total length */
-            low(4 + dataSize), high(4 + dataSize), /* L2CAP length */
-            0x01, 0x00, /* signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             code,
             reqId,
             low(dataSize), high(dataSize),
-        } + data;
+        } + data);
     }
 
     Buffer makeEchoRequest(const Buffer &data, uint8_t reqId) {
@@ -256,16 +253,12 @@ protected:
     }
 
     Buffer makeInfoRequest(BteL2capInfoType type, uint8_t reqId) {
-        return Buffer{
-            0x00, 0x21, /* 0x100 handle + flushable flag */
-            low(10), high(10), /* Total length */
-            low(6), high(6), /* L2CAP length */
-            0x01, 0x00, /* signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_INFO_REQ,
             reqId,
             2, 0, /* command length */
             low(type), high(type),
-        };
+        });
     }
 
     void sendInfoRequest(BteL2capInfoType type, uint8_t reqId) {
@@ -275,17 +268,13 @@ protected:
     Buffer makeInfoResponse(uint8_t reqId, BteL2capInfoType type,
                             uint16_t result, const Buffer &data = {}) {
         const uint16_t dataSize = data.size();
-        return Buffer{
-            0x00, 0x21, /* 0x100 handle + flushable flag */
-            low(12 + dataSize), high(12 + dataSize), /* Total length */
-            low(8 + dataSize), high(8 + dataSize), /* L2CAP length */
-            0x01, 0x00, /* signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_INFO_RSP,
             reqId,
             low(4 + dataSize), high(4 + dataSize),
             low(type), high(type),
             low(result), high(result),
-        } + data;
+        } + data);
     }
 
     Buffer makeInfoResponse(uint8_t reqId, BteL2capInfoType type,
@@ -358,17 +347,13 @@ protected:
     Buffer makeDisconnectResponse(uint8_t reqId,
                                   BteL2capChannelId destCid,
                                   BteL2capChannelId sourceCid) {
-        return Buffer{
-            low(m_connHandle), uint8_t(0x20 | high(m_connHandle)),
-            12, 0, /* Total length */
-            8, 0, /* L2CAP length */
-            0x01, 0x00, /* Signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_DISCONN_RSP,
             reqId,
             4, 0, /* command length */
             low(destCid), high(destCid),
             low(sourceCid), high(sourceCid),
-        };
+        });
     }
 
     void sendDisconnectResponse(uint8_t reqId) {
@@ -379,17 +364,13 @@ protected:
     Buffer makeDisconnectRequest(uint8_t reqId,
                                  BteL2capChannelId destCid,
                                  BteL2capChannelId sourceCid) {
-        return Buffer{
-            low(m_connHandle), uint8_t(0x20 | high(m_connHandle)),
-            12, 0, /* Total length */
-            8, 0, /* L2CAP length */
-            0x01, 0x00, /* Signalling channel */
+        return makeL2capMessage(m_connHandle, 0x1, Buffer{
             L2CAP_SIGNAL_DISCONN_REQ,
             reqId,
             4, 0, /* command length */
             low(destCid), high(destCid),
             low(sourceCid), high(sourceCid),
-        };
+        });
     }
 
     void sendDisconnectRequest(uint8_t reqId) {
