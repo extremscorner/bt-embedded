@@ -788,7 +788,8 @@ static void on_message_received(BteL2cap *l2cap, BteBufferReader *reader,
         bool wants_more =
             cb(sdp, &reply, sdp->req_data.service_search.userdata);
         if (!wants_more) req_complete = true;
-    } else if (req_opcode == PDU_ID_SERVICE_ATTR_REQ) {
+    } else if (req_opcode == PDU_ID_SERVICE_ATTR_REQ ||
+               req_opcode == PDU_ID_SERVICE_SEARCH_ATTR_REQ) {
         BteSdpServiceAttrCb cb = sdp->req_data.service_attr.cb;
 
         BteSdpServiceAttrReply reply;
@@ -972,6 +973,65 @@ bool bte_sdp_service_attr_req(BteSdpClient *sdp, uint32_t service_record,
 
     BteBuffer *buffer =
         service_attr_req_packet(sdp, service_record, max_count, id_list);
+    if (UNLIKELY(!buffer)) return false;
+
+    sdp->last_req = bte_buffer_ref(buffer);
+    int rc = bte_l2cap_send_message(sdp->l2cap, buffer);
+    if (UNLIKELY(rc < 0)) {
+        bte_buffer_unref(sdp->last_req);
+        sdp->last_req = NULL;
+        return false;
+    }
+
+    sdp->req_data.service_attr.cb = cb;
+    sdp->req_data.service_attr.userdata = userdata;
+    sdp->req_data.service_attr.attr_list_de = NULL;
+    sdp->req_data.service_attr.written = 0;
+    return true;
+}
+
+static BteBuffer *service_search_attr_req_packet(
+    BteSdpClient *sdp, const uint8_t *pattern, uint16_t max_count,
+    const uint8_t *id_list)
+{
+    uint32_t pattern_size = bte_sdp_de_get_total_size(pattern);
+    uint32_t id_list_size = bte_sdp_de_get_total_size(id_list);
+    uint16_t size = pattern_size + 2 + id_list_size + 1;
+
+    BteBufferWriter writer;
+    bool ok = create_pdu(sdp->l2cap, &writer, PDU_ID_SERVICE_SEARCH_ATTR_REQ,
+                         next_transaction_id(), size);
+    if (UNLIKELY(!ok)) return NULL;
+
+    ok = bte_buffer_writer_write(&writer, pattern, pattern_size);
+    if (UNLIKELY(!ok)) goto error;
+
+    uint16_t max_count_be = htobe16(max_count);
+    ok = bte_buffer_writer_write(&writer, &max_count_be, sizeof(max_count_be));
+    if (UNLIKELY(!ok)) goto error;
+
+    ok = bte_buffer_writer_write(&writer, id_list, id_list_size);
+    if (UNLIKELY(!ok)) goto error;
+
+    sdp->continuation_offset = pattern_size + 2 + id_list_size;
+    ok = write_cont_state(&writer, NULL);
+    if (UNLIKELY(!ok)) goto error;
+
+    return bte_buffer_writer_end(&writer);
+
+error:
+    bte_buffer_unref(writer.buffer);
+    return NULL;
+}
+
+bool bte_sdp_service_search_attr_req(
+    BteSdpClient *sdp, const uint8_t *pattern, uint16_t max_count,
+    const uint8_t *id_list, BteSdpServiceSearchAttrCb cb, void *userdata)
+{
+    if (sdp->last_req) return false;
+
+    BteBuffer *buffer =
+        service_search_attr_req_packet(sdp, pattern, max_count, id_list);
     if (UNLIKELY(!buffer)) return false;
 
     sdp->last_req = bte_buffer_ref(buffer);

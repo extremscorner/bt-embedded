@@ -91,6 +91,15 @@ public:
             &SdpClient::Callbacks::serviceAttrReq, f);
     }
 
+    bool serviceSearchAttrReq(const uint8_t *pattern, uint16_t max_count,
+                              const uint8_t *id_list, const ServiceAttrCb &cb)
+    {
+        auto *f = new ServiceAttrCb(cb);
+        return bte_sdp_service_search_attr_req(
+            m_sdp, pattern, max_count, id_list,
+            &SdpClient::Callbacks::serviceAttrReq, f);
+    }
+
 private:
     struct Callbacks {
         static bool serviceSearchReq(

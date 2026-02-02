@@ -152,6 +152,11 @@ bool bte_sdp_service_attr_req(BteSdpClient *sdp, uint32_t service_record,
                               uint16_t max_count, const uint8_t *id_list,
                               BteSdpServiceAttrCb cb, void *userdata);
 
+typedef BteSdpServiceAttrCb BteSdpServiceSearchAttrCb;
+bool bte_sdp_service_search_attr_req(
+    BteSdpClient *sdp, const uint8_t *pattern, uint16_t max_count,
+    const uint8_t *id_list, BteSdpServiceSearchAttrCb cb, void *userdata);
+
 /* For testing only */
 void bte_sdp_reset();
 
