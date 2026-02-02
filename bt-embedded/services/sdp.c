@@ -866,11 +866,10 @@ BteL2cap *bte_sdp_client_get_l2cap(BteSdpClient *sdp)
 }
 
 static BteBuffer *service_search_req_packet(
-    BteSdpClient *sdp, const uint8_t *pattern, uint16_t max_count,
-    uint8_t *cont_state)
+    BteSdpClient *sdp, const uint8_t *pattern, uint16_t max_count)
 {
     uint32_t pattern_size = bte_sdp_de_get_total_size(pattern);
-    uint16_t size = pattern_size + 2 + cont_state_len(cont_state);
+    uint16_t size = pattern_size + 2 + 1;
 
     BteBufferWriter writer;
     bool ok = create_pdu(sdp->l2cap, &writer, PDU_ID_SERVICE_SEARCH_REQ,
@@ -885,7 +884,7 @@ static BteBuffer *service_search_req_packet(
     if (UNLIKELY(!ok)) goto error;
 
     sdp->continuation_offset = pattern_size + 2;
-    ok = write_cont_state(&writer, cont_state);
+    ok = write_cont_state(&writer, NULL);
     if (UNLIKELY(!ok)) goto error;
 
     return bte_buffer_writer_end(&writer);
@@ -901,8 +900,7 @@ bool bte_sdp_service_search_req(BteSdpClient *sdp, const uint8_t *pattern,
 {
     if (sdp->last_req) return false;
 
-    BteBuffer *buffer =
-        service_search_req_packet(sdp, pattern, max_count, NULL);
+    BteBuffer *buffer = service_search_req_packet(sdp, pattern, max_count);
     if (UNLIKELY(!buffer)) return false;
 
     sdp->last_req = bte_buffer_ref(buffer);
@@ -934,10 +932,10 @@ bool bte_sdp_service_search_req_uuid16(
 
 static BteBuffer *service_attr_req_packet(
     BteSdpClient *sdp, uint32_t service_record, uint16_t max_count,
-    const uint8_t *id_list, uint8_t *cont_state)
+    const uint8_t *id_list)
 {
     uint32_t id_list_size = bte_sdp_de_get_total_size(id_list);
-    uint16_t size = 4 + 2 + id_list_size + cont_state_len(cont_state);
+    uint16_t size = 4 + 2 + id_list_size + 1;
 
     BteBufferWriter writer;
     bool ok = create_pdu(sdp->l2cap, &writer, PDU_ID_SERVICE_ATTR_REQ,
@@ -956,7 +954,7 @@ static BteBuffer *service_attr_req_packet(
     if (UNLIKELY(!ok)) goto error;
 
     sdp->continuation_offset = 4 + 2 + id_list_size;
-    ok = write_cont_state(&writer, cont_state);
+    ok = write_cont_state(&writer, NULL);
     if (UNLIKELY(!ok)) goto error;
 
     return bte_buffer_writer_end(&writer);
@@ -973,7 +971,7 @@ bool bte_sdp_service_attr_req(BteSdpClient *sdp, uint32_t service_record,
     if (sdp->last_req) return false;
 
     BteBuffer *buffer =
-        service_attr_req_packet(sdp, service_record, max_count, id_list, NULL);
+        service_attr_req_packet(sdp, service_record, max_count, id_list);
     if (UNLIKELY(!buffer)) return false;
 
     sdp->last_req = bte_buffer_ref(buffer);
