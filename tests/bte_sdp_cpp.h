@@ -79,6 +79,11 @@ private:
 
 } // namespace Bte
 
+inline bool operator==(const BteSdpDeUuid128 &a, const BteSdpDeUuid128 &b)
+{
+    return memcmp(&a, &b, sizeof(a)) == 0;
+}
+
 inline std::ostream &operator<<(std::ostream &os,
                                 const Bte::SdpClient::ServiceSearchReply &a)
 {

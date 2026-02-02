@@ -231,7 +231,7 @@ static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
         uint16_t v16;
         uint32_t v32;
         uint64_t v64;
-        uint8_t *vptr;
+        BteSdpUint128 v128;
         switch (type) {
         case BTE_SDP_DE_TYPE_NIL:
             if (remaining > req_size) {
@@ -284,10 +284,10 @@ static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
 #endif
         case BTE_SDP_DE_TYPE_UUID128:
             req_size = 1 + 16;
-            vptr = va_arg(*args, uint8_t *);
+            v128 = va_arg(*args, BteSdpUint128);
             if (remaining > req_size) {
                 dest[0] = type;
-                memcpy(dest + 1, vptr, 16);
+                memcpy(dest + 1, &v128, sizeof(v128));
                 if (flip) {
                     uint64_t tmp = *((uint64_t*)(dest + 1));
                     write_be64(*((uint64_t*)(dest + 1 + 8)), dest + 1);

@@ -1,4 +1,5 @@
 #include "bte_cpp.h"
+#include "bte_sdp_cpp.h"
 
 #include "bt-embedded/services/sdp.h"
 
@@ -57,7 +58,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicUuid128)
         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
     };
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_UUID128, &uuid,
+                                     BTE_SDP_DE_TYPE_UUID128, uuid,
                                      -1);
     buffer.resize(size);
     Buffer expected = {
@@ -74,7 +75,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicUInt128)
     v <<= 64;
     v += 0x8899aabbccddeeff;
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_UINT128, &v,
+                                     BTE_SDP_DE_TYPE_UINT128, v,
                                      -1);
     buffer.resize(size);
     Buffer expected = {
