@@ -48,6 +48,12 @@ struct bte_sdp_client_t {
             BteSdpServiceSearchCb cb;
             void *userdata;
         } service_search;
+        struct {
+            BteSdpServiceAttrCb cb;
+            void *userdata;
+            uint8_t *attr_list_de;
+            uint16_t written;
+        } service_attr;
     } req_data;
 };
 
@@ -665,6 +671,64 @@ static bool parse_service_search_reply(
     return true;
 }
 
+static bool parse_service_attr_reply(
+    BteSdpClient *sdp, uint8_t *params, uint16_t param_len,
+    BteSdpServiceAttrReply *reply, uint8_t **cont_state)
+{
+    if (UNLIKELY(param_len < 3)) return false;
+
+    uint16_t remaining = param_len;
+    uint16_t attrs_size = read_be16(params);
+    uint16_t read = 2;
+    params += read;
+    remaining -= read;
+
+    const uint8_t *id_list = params;
+    read = attrs_size;
+    params += read;
+    remaining -= read;
+
+    if (UNLIKELY(remaining < 1)) return false;
+    uint16_t len = cont_state_len(params);
+    if (UNLIKELY(len > 17 || len > remaining)) return false;
+
+    *cont_state = params;
+    uint32_t total_size, written;
+    if (params[0] != 0 || sdp->req_data.service_attr.attr_list_de) {
+        /* The reply is fragmented */
+        if (!sdp->req_data.service_attr.attr_list_de) {
+            total_size = bte_sdp_de_get_total_size(id_list);
+            if (total_size >= 0x10000) return false;
+
+            sdp->req_data.service_attr.attr_list_de = bte_malloc(total_size);
+        } else {
+            total_size = bte_sdp_de_get_total_size(
+                sdp->req_data.service_attr.attr_list_de);
+        }
+
+        if (sdp->req_data.service_attr.written + attrs_size > total_size) {
+            return false;
+        }
+
+        memcpy(sdp->req_data.service_attr.attr_list_de +
+               sdp->req_data.service_attr.written, id_list, attrs_size);
+        sdp->req_data.service_attr.written += attrs_size;
+        reply->attr_list_de = sdp->req_data.service_attr.attr_list_de;
+        written = sdp->req_data.service_attr.written;
+    } else {
+        total_size = bte_sdp_de_get_total_size(id_list);
+        written = attrs_size;
+        reply->attr_list_de = id_list;
+    }
+
+    if (params[0] == 0 &&
+        /* This is the last packet: check that the DE size matches */
+        written != total_size) {
+        return false;
+    }
+    return true;
+}
+
 static void on_message_received(BteL2cap *l2cap, BteBufferReader *reader,
                                 void *userdata)
 {
@@ -724,6 +788,26 @@ static void on_message_received(BteL2cap *l2cap, BteBufferReader *reader,
         bool wants_more =
             cb(sdp, &reply, sdp->req_data.service_search.userdata);
         if (!wants_more) req_complete = true;
+    } else if (req_opcode == PDU_ID_SERVICE_ATTR_REQ) {
+        BteSdpServiceAttrCb cb = sdp->req_data.service_attr.cb;
+
+        BteSdpServiceAttrReply reply;
+        reply.error_code = error_code;
+        if (UNLIKELY(error_code != 0)) {
+            reply.attr_list_de = NULL;
+            req_complete = true;
+        } else {
+            bool ok = parse_service_attr_reply(sdp, params, param_len,
+                                               &reply, &cont_state);
+            if (UNLIKELY(!ok)) return;
+            req_complete = cont_state[0] == 0;
+        }
+        if (req_complete) {
+            cb(sdp, &reply, sdp->req_data.service_attr.userdata);
+            if (sdp->req_data.service_attr.attr_list_de) {
+                bte_free(sdp->req_data.service_attr.attr_list_de);
+            }
+        }
     }
 
     if (req_complete) {
@@ -846,6 +930,65 @@ bool bte_sdp_service_search_req_uuid16(
                      uuids, BTE_SDP_DE_END, BTE_SDP_DE_END);
 
     return bte_sdp_service_search_req(sdp, buffer, max_count, cb, userdata);
+}
+
+static BteBuffer *service_attr_req_packet(
+    BteSdpClient *sdp, uint32_t service_record, uint16_t max_count,
+    const uint8_t *id_list, uint8_t *cont_state)
+{
+    uint32_t id_list_size = bte_sdp_de_get_total_size(id_list);
+    uint16_t size = 4 + 2 + id_list_size + cont_state_len(cont_state);
+
+    BteBufferWriter writer;
+    bool ok = create_pdu(sdp->l2cap, &writer, PDU_ID_SERVICE_ATTR_REQ,
+                         next_transaction_id(), size);
+    if (UNLIKELY(!ok)) return NULL;
+
+    uint32_t service_be = htobe32(service_record);
+    ok = bte_buffer_writer_write(&writer, &service_be, sizeof(service_be));
+    if (UNLIKELY(!ok)) goto error;
+
+    uint16_t max_count_be = htobe16(max_count);
+    ok = bte_buffer_writer_write(&writer, &max_count_be, sizeof(max_count_be));
+    if (UNLIKELY(!ok)) goto error;
+
+    ok = bte_buffer_writer_write(&writer, id_list, id_list_size);
+    if (UNLIKELY(!ok)) goto error;
+
+    sdp->continuation_offset = 4 + 2 + id_list_size;
+    ok = write_cont_state(&writer, cont_state);
+    if (UNLIKELY(!ok)) goto error;
+
+    return bte_buffer_writer_end(&writer);
+
+error:
+    bte_buffer_unref(writer.buffer);
+    return NULL;
+}
+
+bool bte_sdp_service_attr_req(BteSdpClient *sdp, uint32_t service_record,
+                              uint16_t max_count, const uint8_t *id_list,
+                              BteSdpServiceAttrCb cb, void *userdata)
+{
+    if (sdp->last_req) return false;
+
+    BteBuffer *buffer =
+        service_attr_req_packet(sdp, service_record, max_count, id_list, NULL);
+    if (UNLIKELY(!buffer)) return false;
+
+    sdp->last_req = bte_buffer_ref(buffer);
+    int rc = bte_l2cap_send_message(sdp->l2cap, buffer);
+    if (UNLIKELY(rc < 0)) {
+        bte_buffer_unref(sdp->last_req);
+        sdp->last_req = NULL;
+        return false;
+    }
+
+    sdp->req_data.service_attr.cb = cb;
+    sdp->req_data.service_attr.userdata = userdata;
+    sdp->req_data.service_attr.attr_list_de = NULL;
+    sdp->req_data.service_attr.written = 0;
+    return true;
 }
 
 void bte_sdp_reset()

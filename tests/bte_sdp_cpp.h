@@ -61,6 +61,36 @@ public:
             &SdpClient::Callbacks::serviceSearchReq, f);
     }
 
+    struct ServiceAttrReply {
+        uint16_t errorCode;
+        Buffer attrListDe;
+
+        static ServiceAttrReply fromC(const BteSdpServiceAttrReply *r) {
+            ServiceAttrReply reply { r->error_code, };
+            if (r->attr_list_de) {
+                uint32_t size = bte_sdp_de_get_total_size(r->attr_list_de);
+                reply.attrListDe =
+                    Buffer(r->attr_list_de, std::next(r->attr_list_de, size));
+            }
+            return reply;
+        }
+
+        bool operator==(const ServiceAttrReply &r) const {
+            return errorCode == r.errorCode && attrListDe == r.attrListDe;
+        }
+    };
+
+    using ServiceAttrCb =
+        std::function<void(const ServiceAttrReply &reply)>;
+    bool serviceAttrReq(uint32_t service_record, uint16_t max_count,
+                        const uint8_t *id_list, const ServiceAttrCb &cb)
+    {
+        auto *f = new ServiceAttrCb(cb);
+        return bte_sdp_service_attr_req(
+            m_sdp, service_record, max_count, id_list,
+            &SdpClient::Callbacks::serviceAttrReq, f);
+    }
+
 private:
     struct Callbacks {
         static bool serviceSearchReq(
@@ -71,6 +101,13 @@ private:
                 delete cb;
             }
             return wantsMore;
+        }
+
+        static void serviceAttrReq(
+            BteSdpClient *sdp, const BteSdpServiceAttrReply *r, void *d) {
+            ServiceAttrCb *cb = static_cast<ServiceAttrCb*>(d);
+            (*cb)(ServiceAttrReply::fromC(r));
+            delete cb;
         }
     };
 

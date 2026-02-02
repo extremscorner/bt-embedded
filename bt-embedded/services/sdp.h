@@ -140,6 +140,18 @@ bool bte_sdp_service_search_req_uuid16(
     BteSdpClient *sdp, uint16_t *uuids, int n_uuids, uint16_t max_count,
     BteSdpServiceSearchCb cb, void *userdata);
 
+typedef struct {
+    uint16_t error_code;
+    const uint8_t *attr_list_de;
+} BteSdpServiceAttrReply;
+
+typedef void (*BteSdpServiceAttrCb)(BteSdpClient *sdp,
+                                    const BteSdpServiceAttrReply *reply,
+                                    void *userdata);
+bool bte_sdp_service_attr_req(BteSdpClient *sdp, uint32_t service_record,
+                              uint16_t max_count, const uint8_t *id_list,
+                              BteSdpServiceAttrCb cb, void *userdata);
+
 /* For testing only */
 void bte_sdp_reset();
 
