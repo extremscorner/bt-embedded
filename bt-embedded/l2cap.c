@@ -961,11 +961,18 @@ static bool acl_l2cap_handle_configure_req(
     }
     BteL2capConfigureParams *params = &conf->params;
 
+    /* There are several code paths here that can trigger a client callback,
+     * and in that callback the client might unreference the l2cap object. So,
+     * hold a temporary reference, and make sure to release it before returning
+     */
+    bte_l2cap_ref(l2cap);
+
     uint16_t unknown_param_size = 0;
     if (conf->has_pending_packets) {
         /* We only expect null-option requests, to have an ID to which we
          * should send out continuation reply */
         l2cap_config_send_resp_packet(l2cap, id);
+        bte_l2cap_unref(l2cap);
         return true;
     }
 
@@ -1021,6 +1028,7 @@ static bool acl_l2cap_handle_configure_req(
         l2cap->configure_req = NULL;
     }
 
+    bte_l2cap_unref(l2cap);
     return true;
 }
 
