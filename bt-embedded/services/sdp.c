@@ -34,6 +34,36 @@
 #define PDU_OFFSET_PARAM_LEN 11
 #define PDU_OFFSET_PARAMS    13
 
+#ifdef __SIZEOF_INT128__
+static inline BteSdpUint128 uint128_from_64(uint64_t v) {
+    return v;
+}
+static inline BteSdpInt128 int128_from_64(int64_t v) {
+    return v;
+}
+#else
+static inline BteSdpUint128 uint128_from_64(uint64_t v) {
+    BteSdpUint128 ret;
+    uint64_t *parts = (void*)&ret;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    parts[0] = v; parts[1] = 0;
+#else
+    parts[1] = v; parts[0] = 0;
+#endif
+    return ret;
+}
+static inline BteSdpInt128 int128_from_64(int64_t v) {
+    BteSdpUint128 ret;
+    int64_t *parts = (void*)&ret;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    parts[0] = v; parts[1] = v > 0 ? 0 : -1;
+#else
+    parts[1] = v; parts[0] = v > 0 ? 0 : -1;
+#endif
+    return ret;
+}
+#endif
+
 struct bte_sdp_client_t {
     atomic_int ref_count;
     void *userdata;
@@ -533,21 +563,22 @@ BteSdpUint128 bte_sdp_de_reader_read_uint128(BteSdpDeReader *reader)
 {
     const uint8_t *de = reader->de + reader->offset;
     uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 16)) return 0;
+    if (UNLIKELY(size > 16)) return uint128_from_64(0);
 
     const uint8_t *data = de + bte_sdp_de_get_header_size(de);
-    return size == 16 ? read_be128(data) : bte_sdp_de_reader_read_uint64(reader);
+    return size == 16 ? read_be128(data) :
+        uint128_from_64(bte_sdp_de_reader_read_uint64(reader));
 }
 
 BteSdpInt128 bte_sdp_de_reader_read_int128(BteSdpDeReader *reader)
 {
     const uint8_t *de = reader->de + reader->offset;
     uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 16)) return 0;
+    if (UNLIKELY(size > 16)) return int128_from_64(0);
 
     const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 16 ? (BteSdpInt128)read_be128(data) :
-        bte_sdp_de_reader_read_int64(reader);
+        int128_from_64(bte_sdp_de_reader_read_int64(reader));
 }
 
 BteSdpDeUuid128 bte_sdp_de_reader_read_uuid128(BteSdpDeReader *reader)
