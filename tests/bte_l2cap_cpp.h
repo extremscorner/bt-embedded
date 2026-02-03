@@ -64,6 +64,12 @@ inline bool operator==(const BteL2capInfo &a, const BteL2capInfo &b)
     return false;
 }
 
+inline bool operator==(const BteL2capNewConfiguredReply &a,
+                       const BteL2capNewConfiguredReply &b)
+{
+    return a.result == b.result;
+}
+
 class TestL2capConfig;
 class TestL2capFixtureConnected;
 class TestL2capFixtureConfigured;
@@ -326,6 +332,21 @@ public:
                                   this);
     }
 
+    using NewConfiguredCb = std::function<void(
+        std::optional<L2cap> l2cap, const BteL2capNewConfiguredReply &reply)>;
+    static bool newConfigured(
+        Client &client, const BteBdAddr &address, BteL2capPsm psm,
+        const std::optional<BteHciConnectParams> &params,
+        const std::optional<ConfigureParams> &conf,
+        const NewConfiguredCb &cb) {
+        auto *f = new NewConfiguredCb(cb);
+        return bte_l2cap_new_configured(
+            client.m_client, &address, psm,
+            params ? &params.value() : nullptr,
+            conf ? &conf.value().p : nullptr,
+            &L2cap::Callbacks::new_configured, f);
+    }
+
 private:
     friend class ::TestL2capConfig;
     friend class ::TestL2capFixtureConnected;
@@ -414,6 +435,14 @@ private:
             L2cap *_this = static_cast<L2cap*>(d);
             if (_this->m_onDisconnected)
                 _this->m_onDisconnected(reason);
+        }
+
+        static void new_configured(BteL2cap *l2cap,
+                                   const BteL2capNewConfiguredReply *reply,
+                                   void *userdata) {
+            NewConfiguredCb *cb = static_cast<NewConfiguredCb*>(userdata);
+            (*cb)(l2cap ? L2cap(bte_l2cap_ref(l2cap)) : std::optional<L2cap>{}, *reply);
+            delete cb;
         }
     };
 

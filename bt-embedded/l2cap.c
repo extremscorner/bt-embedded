@@ -1718,6 +1718,89 @@ void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
     l2cap->disconnect_userdata = userdata;
 }
 
+typedef struct {
+    const BteL2capConfigureParams *conf;
+    bool reply_sent;
+    BteL2capNewConfiguredCb callback;
+    void *userdata;
+} NewConfiguredData;
+
+static void new_configured_configure_cb(
+    BteL2cap *l2cap, const BteL2capConfigureReply *reply, void *userdata)
+{
+    NewConfiguredData *cd = userdata;
+    if (UNLIKELY(reply->rejected_mask != 0 || reply->unknown_mask != 0)) {
+        BteL2capNewConfiguredReply r = { BTE_L2CAP_CONN_RESP_RES_CONFIG };
+        cd->callback(NULL, &r, cd->userdata);
+        cd->reply_sent = true;
+        bte_l2cap_disconnect(l2cap);
+        return;
+    }
+}
+
+static void new_configured_state_changed_cb(
+    BteL2cap *l2cap, BteL2capState state, void *userdata)
+{
+    NewConfiguredData *cd = userdata;
+
+    if (state == BTE_L2CAP_OPEN) {
+        bte_l2cap_set_userdata(l2cap, NULL);
+        BteL2capNewConfiguredReply r = { BTE_L2CAP_CONN_RESP_RES_OK };
+        cd->callback(l2cap, &r, cd->userdata);
+        cd->reply_sent = true;
+        bte_l2cap_unref(l2cap);
+        bte_free(cd);
+    } else if (state == BTE_L2CAP_CLOSED) {
+        if (!cd->reply_sent) {
+            BteL2capNewConfiguredReply r = {
+                BTE_L2CAP_CONN_RESP_RES_DISCONNECTED
+            };
+            cd->callback(NULL, &r, cd->userdata);
+            cd->reply_sent = true;
+        }
+        bte_l2cap_unref(l2cap);
+        bte_free(cd);
+    }
+}
+
+static void new_configured_connect_cb(
+    BteL2cap *l2cap, const BteL2capConnectionResponse *reply, void *userdata)
+{
+    NewConfiguredData *cd = userdata;
+
+    if (reply->result == BTE_L2CAP_CONN_RESP_RES_PENDING) return;
+
+    if (UNLIKELY(!l2cap)) {
+        BteL2capNewConfiguredReply r = { reply->result };
+        cd->callback(l2cap, &r, cd->userdata);
+        bte_free(cd);
+        return;
+    }
+
+    bte_l2cap_ref(l2cap);
+    bte_l2cap_set_userdata(l2cap, cd);
+    bte_l2cap_on_state_changed(l2cap, new_configured_state_changed_cb);
+    /* Proceed with the configuration */
+    bte_l2cap_configure(l2cap, cd->conf, new_configured_configure_cb, cd);
+}
+
+bool bte_l2cap_new_configured(
+    BteClient *client, const BteBdAddr *address, BteL2capPsm psm,
+    const BteHciConnectParams *params, const BteL2capConfigureParams *conf,
+    BteL2capNewConfiguredCb callback, void *userdata)
+{
+    NewConfiguredData *cd = bte_malloc(sizeof(NewConfiguredData));
+    if (UNLIKELY(!cd)) return false;
+
+    cd->conf = conf;
+    cd->reply_sent = false;
+    cd->callback = callback;
+    cd->userdata = userdata;
+    bte_l2cap_new_outgoing(client, address, psm, params,
+                           new_configured_connect_cb, cd);
+    return true;
+}
+
 void bte_l2cap_reset()
 {
     s_next_local_channel_id = 0x0040;

@@ -337,11 +337,11 @@ protected:
     }
 
     void sendHciConnectionComplete(const BteBdAddr &address,
-                                   BteConnHandle handle = 0x100) {
+                                   BteConnHandle handle = 0x100,
+                                   uint8_t status = 0) {
         const uint8_t eventSize = 1 + 2 + 6 + 1 + 1;
         uint8_t link_type = 1; /* ACL */
         uint8_t enc_mode = 0;
-        uint8_t status = 0;
         m_backend.sendEvent(Buffer{
             HCI_CONNECTION_COMPLETE, eventSize, status,
             low(handle), high(handle)} +

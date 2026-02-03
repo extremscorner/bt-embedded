@@ -226,6 +226,27 @@ void bte_l2cap_disconnect(BteL2cap *l2cap);
 void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
                                void *userdata);
 
+/* Convenience API: connect and configure in one step */
+typedef struct {
+    /* BTE_L2CAP_CONN_RESP_RES_* standard values plus those defined below */
+    uint16_t result;
+} BteL2capNewConfiguredReply;
+
+/* The peer did not accept our configuration */
+#define BTE_L2CAP_CONN_RESP_RES_CONFIG       (uint16_t)0xF001
+/* The ACL connection was dropped */
+#define BTE_L2CAP_CONN_RESP_RES_DISCONNECTED (uint16_t)0xF002
+
+typedef void (*BteL2capNewConfiguredCb)(
+    BteL2cap *l2cap, const BteL2capNewConfiguredReply *reply, void *userdata);
+
+/* Note: the functin does not copy \a conf: it must remain valid until the
+ * callback is invoked. */
+bool bte_l2cap_new_configured(
+    BteClient *client, const BteBdAddr *address, BteL2capPsm psm,
+    const BteHciConnectParams *params, const BteL2capConfigureParams *conf,
+    BteL2capNewConfiguredCb callback, void *userdata);
+
 /* For testing use only: reset the static variables for the channel and message
  * IDs */
 void bte_l2cap_reset();
