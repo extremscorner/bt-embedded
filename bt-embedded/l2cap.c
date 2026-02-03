@@ -1571,7 +1571,9 @@ void bte_l2cap_configure(
         return;
     }
 
-    L2capConfigureData conf = { 0, 0, *params };
+    L2capConfigureData conf = { 0, 0 };
+    if (params) conf.params = *params;
+    else conf.params.field_mask = 0;
     bool ok = l2cap_config_send(l2cap, &conf, 0);
     if (LIKELY(ok)) {
         l2cap->cmd_data.configure.client_cb = callback;
