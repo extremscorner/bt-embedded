@@ -64,6 +64,17 @@ protected:
         } + data;
     }
 
+    Buffer makeConnectRequest(uint8_t reqId, BteConnHandle connHandle,
+                              BteL2capPsm psm) {
+        return makeL2capMessage(connHandle, 0x1, Buffer{
+            L2CAP_SIGNAL_CONN_REQ,
+            reqId,
+            4, 0, /* cmd length */
+            low(psm), high(psm),
+            low(m_localCid), high(m_localCid), /* source CID */
+        });
+    }
+
     Buffer makeConnectResponse(
         uint8_t reqId,
         BteL2capChannelId destCid, BteL2capChannelId sourceCid,
@@ -86,8 +97,10 @@ protected:
                                    result, status);
     }
 
-    void sendConnectResponse(uint8_t reqId) {
-        m_backend.sendData(makeConnectResponse(reqId));
+    void sendConnectResponse(
+        uint8_t reqId, uint16_t result = BTE_L2CAP_CONN_RESP_RES_OK,
+        uint16_t status = BTE_L2CAP_CONN_RESP_STATUS_NO_INFO) {
+        m_backend.sendData(makeConnectResponse(reqId, result, status));
     }
 
     L2cap connectTo(const BteBdAddr &address, BteL2capPsm psm,
@@ -309,7 +322,7 @@ protected:
                                             std::forward<Params>(params)...));
     }
 
-    Buffer makeHciCreateDisconnection(const BteBdAddr &address,
+    Buffer makeHciCreateConnection(const BteBdAddr &address,
                                    BtePacketType packetType,
                                    uint8_t pageScanRepMode,
                                    uint16_t clockOffset,
@@ -323,15 +336,31 @@ protected:
         };
     }
 
-    void sendHciDisconnectionComplete(const BteBdAddr &address) {
+    void sendHciConnectionComplete(const BteBdAddr &address,
+                                   BteConnHandle handle = 0x100) {
         const uint8_t eventSize = 1 + 2 + 6 + 1 + 1;
         uint8_t link_type = 1; /* ACL */
         uint8_t enc_mode = 0;
         uint8_t status = 0;
-        m_backend.sendEvent(
-            Buffer{HCI_CONNECTION_COMPLETE, eventSize, status, 0x00, 0x01} +
+        m_backend.sendEvent(Buffer{
+            HCI_CONNECTION_COMPLETE, eventSize, status,
+            low(handle), high(handle)} +
             address + Buffer{link_type, enc_mode});
-        m_connections.insert(0x0100);
+        m_connections.insert(handle);
+    }
+
+    Buffer makeHciCreateDisconnection(const BteBdAddr &address,
+                                   BtePacketType packetType,
+                                   uint8_t pageScanRepMode,
+                                   uint16_t clockOffset,
+                                   bool allowRoleSwitch) {
+        uint8_t size = 13;
+        const uint8_t *b = address.bytes;
+        return {
+            0x5, 0x4, size, b[0], b[1], b[2], b[3], b[4], b[5],
+            low(packetType), high(packetType), pageScanRepMode,
+            0, low(clockOffset), high(clockOffset), allowRoleSwitch
+        };
     }
 
     void sendHciDisconnectionComplete(BteConnHandle handle,
