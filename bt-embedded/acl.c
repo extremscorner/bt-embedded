@@ -262,13 +262,15 @@ static void connect_status_cb(BteHci *hci, const BteHciReply *reply,
 static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
                        void *userdata)
 {
-    BteAcl *acl = bte_acl_ref(userdata);
+    BteAcl *acl = userdata;
     if (reply->status == 0) {
         acl->conn_handle = reply->conn_handle;
         acl->encryption_mode = reply->encryption_mode;
     }
     acl->connected_cb(acl, reply->status);
-    bte_acl_unref(acl);
+    if (reply->status != 0) {
+        bte_acl_unref(acl);
+    }
 }
 
 void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params)
