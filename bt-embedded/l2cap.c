@@ -673,10 +673,9 @@ static bool l2cap_config_send(BteL2cap *l2cap, L2capConfigureData *conf,
 
         if (code == L2CAP_SIGNAL_CONFIG_REQ) {
             l2cap->expected_response_code = L2CAP_SIGNAL_CONFIG_RSP;
-            if (l2cap->expected_response_count == 0)
-                l2cap->expected_response_id = s_last_signal_id;
             l2cap->expected_response_count++;
             if (new_start_cmd > 0) msg_id = next_signal_id();
+            l2cap->expected_response_id = s_last_signal_id;
         } else if (new_start_cmd > 0) {
             /* We should wait for an empty request:
              * When used in the Configuration Response, the continuation flag
@@ -1254,11 +1253,11 @@ static bool acl_l2cap_handle_response(
              * the l2cap object when handling the connect response, if the
              * client doesn't care about it */
             bte_l2cap_ref(l2cap);
+            l2cap->expected_response_count--;
             bool ok = l2cap_handle_response(l2cap, code, reader, cmd_len);
-            if (ok) {
-                l2cap->expected_response_count--;
-                if (l2cap->expected_response_count)
-                    l2cap->expected_response_id++;
+            if (!ok) {
+                /* Restore the previous value */
+                l2cap->expected_response_count++;
             }
             bte_l2cap_unref(l2cap);
             return ok;
