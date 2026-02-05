@@ -2,6 +2,7 @@
 #define BTE_SDP_H
 
 #include "../types.h"
+#include "sdp_constants.h"
 
 #ifdef __cplusplus
 extern "C" {
