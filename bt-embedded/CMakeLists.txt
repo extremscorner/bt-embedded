@@ -47,3 +47,35 @@ target_link_options(bt-embedded PRIVATE
 target_link_libraries(bt-embedded PRIVATE
     ${EXTRA_LIBS}
 )
+
+set(PUBLIC_HEADERS
+    bte.h
+    buffer.h
+    client.h
+    hci.h
+    hci_proto.h
+    l2cap.h
+    platform_defs.h
+    types.h
+)
+
+
+# I didn't find a way to preserve the relative path, so installing these
+# manually:
+install(FILES
+    services/obex.h
+    services/sdp.h
+    services/sdp_constants.h
+    DESTINATION "include/bt-embedded/services"
+)
+
+set_target_properties(bt-embedded PROPERTIES
+    PUBLIC_HEADER "${PUBLIC_HEADERS}"
+)
+
+install(TARGETS bt-embedded
+    LIBRARY
+    ARCHIVE
+    RUNTIME
+    PUBLIC_HEADER DESTINATION "include/bt-embedded"
+)
