@@ -40,6 +40,7 @@ add_executable(test_commands
     test_l2cap_info.cpp
     test_l2cap_new_configured.cpp
     test_l2cap_server.cpp
+    test_obex_discovery.cpp
     test_sdp.cpp
     test_sdp_de.cpp
 )

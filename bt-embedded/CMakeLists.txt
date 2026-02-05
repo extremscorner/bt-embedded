@@ -25,6 +25,7 @@ add_library(bt-embedded STATIC
     l2cap.c
     l2cap_echo.c
     l2cap_server.c
+    services/obex.c
     services/sdp.c
 )
 

@@ -855,6 +855,7 @@ public:
     };
 
     Hci &hci() { return m_hci; }
+    BteClient *c_type() const { return m_client; }
 
 private:
     void init() {
