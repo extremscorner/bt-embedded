@@ -67,8 +67,9 @@ uint32_t bte_sdp_de_write(uint8_t *de, size_t buffer_size, ...);
 typedef struct {
     const uint8_t *de;
     int offset;
-    int seq_end_offset;
+    int seq_start_offset;
     uint8_t depth;
+    bool next_called;
 } BteSdpDeReader;
 
 void bte_sdp_de_reader_init(BteSdpDeReader *reader, const uint8_t *de);

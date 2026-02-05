@@ -251,7 +251,8 @@ static void de_array_write(uint8_t *de, int count, int type, const void *data)
     }
 }
 
-static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
+static uint32_t de_write(int depth, uint8_t *de, size_t buffer_size,
+                         va_list *args)
 {
     uint32_t size = 0;
     uint8_t *dest = de;
@@ -360,14 +361,15 @@ static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
                 /* First, we need to compute the size of the included data */
                 va_list args_copy;
                 va_copy(args_copy, *args);
-                uint32_t len = de_write(NULL, 0, args);
+                uint32_t len = de_write(depth + 1, NULL, 0, args);
                 int header_size;
                 uint8_t size_id = var_size(len, &header_size, NULL);
                 req_size = header_size + len;
                 if (remaining > req_size) {
                     dest[0] = type | size_id;
                     var_size(len, NULL, dest);
-                    de_write(dest + header_size, remaining - header_size, &args_copy);
+                    de_write(depth + 1, dest + header_size,
+                             remaining - header_size, &args_copy);
                 }
                 va_end(args_copy);
             }
@@ -388,6 +390,7 @@ static uint32_t de_write(uint8_t *de, size_t buffer_size, va_list *args)
         if (dest) dest += req_size;
         size += req_size;
         remaining -= req_size;
+        if (depth == 0) break;
     }
 
     return size;
@@ -397,7 +400,7 @@ uint32_t bte_sdp_de_write(uint8_t *de, size_t buffer_size, ...)
 {
     va_list args;
     va_start(args, buffer_size);
-    uint32_t size = de_write(de, buffer_size, &args);
+    uint32_t size = de_write(0, de, buffer_size, &args);
     va_end(args);
     return size;
 }
@@ -406,17 +409,24 @@ void bte_sdp_de_reader_init(BteSdpDeReader *reader, const uint8_t *de)
 {
     reader->de = de;
     reader->offset = 0;
-    reader->seq_end_offset = 0;
+    reader->seq_start_offset = 0;
     reader->depth = 0;
+    reader->next_called = false;
 }
 
 bool bte_sdp_de_reader_next(BteSdpDeReader *reader)
 {
-    uint32_t total_size = bte_sdp_de_get_total_size(reader->de);
-    uint32_t end = reader->seq_end_offset > 0 ?
-        reader->seq_end_offset : total_size;
+    if (UNLIKELY(reader->depth == 0)) return false;
+
+    uint32_t seq_size = bte_sdp_de_get_total_size(reader->de +
+                                                  reader->seq_start_offset);
+    uint32_t end = reader->seq_start_offset + seq_size;
     if (reader->offset >= end) return false;
 
+    if (!reader->next_called) {
+        reader->next_called = true;
+        return true;
+    }
     uint32_t el_size = bte_sdp_de_get_total_size(reader->de + reader->offset);
     reader->offset += el_size;
     return reader->offset < end;
@@ -430,14 +440,15 @@ bool bte_sdp_de_reader_enter(BteSdpDeReader *reader)
         return false;
     }
 
-    reader->seq_end_offset = reader->offset + bte_sdp_de_get_total_size(de);
+    reader->seq_start_offset = reader->offset;
     reader->offset += bte_sdp_de_get_header_size(de);
     reader->depth++;
+    reader->next_called = false;
     return true;
 }
 
-static int find_seq_end_offset(const uint8_t *de, uint8_t depth,
-                               int contained_offset)
+static int find_seq_start_offset(const uint8_t *de, uint8_t depth,
+                                 int contained_offset)
 {
     BteSdpDeReader reader;
     bte_sdp_de_reader_init(&reader, de);
@@ -445,7 +456,7 @@ static int find_seq_end_offset(const uint8_t *de, uint8_t depth,
         uint32_t size = bte_sdp_de_reader_get_total_size(&reader);
         if (reader.offset + size >= contained_offset) {
             if (reader.depth == depth) {
-                return reader.offset + size;
+                return reader.offset;
             } else {
                 /* This *must* be a sequence! */
                 bool ok = bte_sdp_de_reader_enter(&reader);
@@ -459,137 +470,152 @@ static int find_seq_end_offset(const uint8_t *de, uint8_t depth,
 
 bool bte_sdp_de_reader_leave(BteSdpDeReader *reader)
 {
-    if (reader->seq_end_offset == 0) return false;
+    if (reader->depth == 0) return false;
 
-    reader->offset = reader->seq_end_offset;
+    reader->offset = reader->seq_start_offset;
     reader->depth--;
     if (reader->depth == 0) {
-        reader->seq_end_offset = 0;
+        reader->seq_start_offset = 0;
     } else {
         /* Re-scan the DE from the beginning, to figure out if we are still
-         * inside a sequence and update seq_end_offset accordingly */
-        reader->seq_end_offset =
-            find_seq_end_offset(reader->de, reader->depth - 1, reader->offset);
+         * inside a sequence and update seq_start_offset accordingly */
+        reader->seq_start_offset =
+            find_seq_start_offset(reader->de, reader->depth - 1, reader->offset);
     }
     return true;
 }
 
-BteSdpDeType bte_sdp_de_reader_get_type(BteSdpDeReader *reader)
+static const uint8_t *de_get_current(BteSdpDeReader *reader)
 {
-    if (reader->offset > 0 && reader->offset == reader->seq_end_offset) {
-        return BTE_SDP_DE_TYPE_INVALID;
+    if (reader->depth > 0) {
+        if (UNLIKELY(!reader->next_called)) return NULL;
+        int seq_size = bte_sdp_de_get_total_size(reader->de +
+                                                 reader->seq_start_offset);
+        if (UNLIKELY(reader->offset >= reader->seq_start_offset + seq_size)) {
+            return NULL;
+        }
     }
 
-    return bte_sdp_de_get_type(reader->de + reader->offset);
+    return reader->de + reader->offset;
+}
+
+static const uint8_t *de_get_data(BteSdpDeReader *reader, uint32_t *size)
+{
+    const uint8_t *de = de_get_current(reader);
+    if (UNLIKELY(!de)) return NULL;
+    *size = bte_sdp_de_get_data_size(de);
+    return *size > 0 ? (de + bte_sdp_de_get_header_size(de)): NULL;
+}
+
+BteSdpDeType bte_sdp_de_reader_get_type(BteSdpDeReader *reader)
+{
+    const uint8_t *de = de_get_current(reader);
+    if (UNLIKELY(!de)) return BTE_SDP_DE_TYPE_INVALID;
+
+    return bte_sdp_de_get_type(de);
 }
 
 uint32_t bte_sdp_de_reader_get_total_size(BteSdpDeReader *reader)
 {
-    return bte_sdp_de_get_total_size(reader->de + reader->offset);
+    const uint8_t *de = de_get_current(reader);
+    if (UNLIKELY(!de)) return 0;
+
+    return bte_sdp_de_get_total_size(de);
 }
 
 uint8_t bte_sdp_de_reader_read_uint8(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size != 1)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size != 1)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return data[0];
 }
 
 uint16_t bte_sdp_de_reader_read_uint16(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size == 0 || size > 2)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 2)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 2 ? read_be16(data) : data[0];
 }
 
 int16_t bte_sdp_de_reader_read_int16(BteSdpDeReader *reader) {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size == 0 || size > 2)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 2)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 2 ? (int16_t)read_be16(data) : (int8_t)data[0];
 }
 
 uint32_t bte_sdp_de_reader_read_uint32(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size == 0 || size == 3 || size > 4)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size == 3 || size > 4)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 4 ? read_be32(data) :
         (size == 2 ? read_be16(data) : data[0]);
 }
 
 int32_t bte_sdp_de_reader_read_int32(BteSdpDeReader *reader) {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 4)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 4)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 4 ? (int32_t)read_be32(data) :
         bte_sdp_de_reader_read_int16(reader);
 }
 
 uint64_t bte_sdp_de_reader_read_uint64(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 8)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 8)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 8 ? read_be64(data) : bte_sdp_de_reader_read_uint32(reader);
 }
 
 int64_t bte_sdp_de_reader_read_int64(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 8)) return 0;
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 8)) return 0;
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 8 ? (int64_t)read_be64(data) :
         bte_sdp_de_reader_read_int32(reader);
 }
 
 BteSdpUint128 bte_sdp_de_reader_read_uint128(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 16)) return uint128_from_64(0);
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 16)) return uint128_from_64(0);
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 16 ? read_be128(data) :
         uint128_from_64(bte_sdp_de_reader_read_uint64(reader));
 }
 
 BteSdpInt128 bte_sdp_de_reader_read_int128(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
-    if (UNLIKELY(size > 16)) return int128_from_64(0);
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data || size > 16)) return int128_from_64(0);
 
-    const uint8_t *data = de + bte_sdp_de_get_header_size(de);
     return size == 16 ? (BteSdpInt128)read_be128(data) :
         int128_from_64(bte_sdp_de_reader_read_int64(reader));
 }
 
 BteSdpDeUuid128 bte_sdp_de_reader_read_uuid128(BteSdpDeReader *reader)
 {
-    const uint8_t *de = reader->de + reader->offset;
-    uint32_t size = bte_sdp_de_get_data_size(de);
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
     BteSdpDeUuid128 ret;
     memset(&ret, 0, sizeof(ret));
+    if (UNLIKELY(!data)) return ret;
 
     if (size == 16) {
-        const uint8_t *data = de + bte_sdp_de_get_header_size(de);
         memcpy(&ret, data, sizeof(ret));
     } else if (size <=4) {
         uint32_t uuid32 = bte_sdp_de_reader_read_uuid32(reader);
@@ -603,13 +629,17 @@ BteSdpDeUuid128 bte_sdp_de_reader_read_uuid128(BteSdpDeReader *reader)
 
 const char *bte_sdp_de_reader_read_str(BteSdpDeReader *reader, size_t *len)
 {
+    uint32_t size;
+    const uint8_t *data = de_get_data(reader, &size);
+    if (UNLIKELY(!data)) return NULL;
+
     const uint8_t *de = reader->de + reader->offset;
     BteSdpDeType type = bte_sdp_de_get_type(de);
     if (UNLIKELY(type != BTE_SDP_DE_TYPE_STRING &&
                  type != BTE_SDP_DE_TYPE_URL )) return NULL;
 
-    if (len) *len = bte_sdp_de_get_data_size(de);
-    return (const char *)(de + bte_sdp_de_get_header_size(de));
+    if (len) *len = size;
+    return (const char *)data;
 }
 
 size_t bte_sdp_de_reader_copy_str(BteSdpDeReader *reader,

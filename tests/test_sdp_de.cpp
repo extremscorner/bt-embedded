@@ -23,7 +23,7 @@ protected:
 TEST_F(TestSdpDeFixture, testWriteBasicNil)
 {
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_NIL, -1);
+                                     BTE_SDP_DE_TYPE_NIL);
     buffer.resize(size);
     Buffer expected = {0x00};
     EXPECT_EQ(buffer, expected);
@@ -32,8 +32,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicNil)
 TEST_F(TestSdpDeFixture, testWriteBasicUint8)
 {
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_UINT8, 180,
-                                     -1);
+                                     BTE_SDP_DE_TYPE_UINT8, 180);
     buffer.resize(size);
     Buffer expected = {0x08, 180};
     EXPECT_EQ(buffer, expected);
@@ -42,8 +41,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicUint8)
 TEST_F(TestSdpDeFixture, testWriteBasicInt64)
 {
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_INT64, 0x1122334455667788,
-                                     -1);
+                                     BTE_SDP_DE_TYPE_INT64, 0x1122334455667788);
     buffer.resize(size);
     Buffer expected = {
         0x13, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -58,8 +56,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicUuid128)
         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
     };
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_UUID128, uuid,
-                                     -1);
+                                     BTE_SDP_DE_TYPE_UUID128, uuid);
     buffer.resize(size);
     Buffer expected = {
         0x1c, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -75,8 +72,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicUInt128)
     v <<= 64;
     v += 0x8899aabbccddeeff;
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_UINT128, v,
-                                     -1);
+                                     BTE_SDP_DE_TYPE_UINT128, v);
     buffer.resize(size);
     Buffer expected = {
         0x0c, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -89,7 +85,7 @@ TEST_F(TestSdpDeFixture, testWriteBasicUInt128)
 TEST_F(TestSdpDeFixture, testWriteString)
 {
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
-                                     BTE_SDP_DE_TYPE_STRING, "Hello", -1);
+                                     BTE_SDP_DE_TYPE_STRING, "Hello");
     buffer.resize(size);
     Buffer expected = {0x25, 5, 'H', 'e', 'l', 'l', 'o'};
     EXPECT_EQ(buffer, expected);
@@ -102,16 +98,13 @@ TEST_F(TestSdpDeFixture, testWriteSequence)
                                      BTE_SDP_DE_TYPE_URL, "file:a.log",
                                      BTE_SDP_DE_TYPE_INT64, 0x1122334455667788,
                                      BTE_SDP_DE_TYPE_BOOL, true,
-                                     -1,
-                                     BTE_SDP_DE_TYPE_INT8, -3,
-                                     -1);
+                                     BTE_SDP_DE_END);
     buffer.resize(size);
     Buffer expected = {
         0x35, 23,
         0x45, 10, 'f', 'i', 'l', 'e', ':', 'a', '.', 'l', 'o', 'g',
         0x13, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
         0x28, 1,
-        0x10, 0xfd,
     };
     EXPECT_EQ(buffer, expected);
 }
@@ -134,8 +127,6 @@ TEST_F(TestSdpDeFixture, testWriteSequenceNested)
                 BTE_SDP_DE_END,
                 BTE_SDP_DE_TYPE_INT8, -1,
             BTE_SDP_DE_END,
-        BTE_SDP_DE_END,
-        BTE_SDP_DE_TYPE_UINT8, 42,
         BTE_SDP_DE_END);
     buffer.resize(size);
     Buffer expected = {
@@ -151,7 +142,6 @@ TEST_F(TestSdpDeFixture, testWriteSequenceNested)
                     0x25, 3, 'y', 'e', 's',
                     0x25, 2, 'n', 'o',
                 0x10, 0xff,
-        0x08, 42,
     };
     EXPECT_EQ(buffer, expected);
 }
@@ -171,8 +161,7 @@ TEST_F(TestSdpDeFixture, testWriteLarge)
                                      BTE_SDP_DE_TYPE_STRING, longString.data(),
                                      BTE_SDP_DE_TYPE_BOOL, true,
                                      BTE_SDP_DE_TYPE_STRING, longString.data(),
-                                     -1,
-                                     -1);
+                                     BTE_SDP_DE_END);
     buffer.resize(size);
     Buffer expected = Buffer {
         0x37, 0x00, 0x01, 0x86, 0x94,
@@ -195,7 +184,7 @@ TEST_F(TestSdpDeFixture, testWriteSequenceArrayInt8)
                                      BTE_SDP_DE_TYPE_SEQUENCE,
                                      BTE_SDP_DE_ARRAY(10),
                                      BTE_SDP_DE_TYPE_INT8, numbers,
-                                     -1, -1);
+                                     BTE_SDP_DE_END);
     buffer.resize(size);
     Buffer expected = {
         0x35, 20,
@@ -212,7 +201,7 @@ TEST_F(TestSdpDeFixture, testWriteSequenceArrayUint32)
                                      BTE_SDP_DE_TYPE_SEQUENCE,
                                      BTE_SDP_DE_ARRAY(3),
                                      BTE_SDP_DE_TYPE_UINT32, numbers,
-                                     -1, -1);
+                                     BTE_SDP_DE_END);
     buffer.resize(size);
     Buffer expected = {
         0x35, 15,
@@ -230,7 +219,7 @@ TEST_F(TestSdpDeFixture, testWriteSequenceArrayStrings)
                                      BTE_SDP_DE_TYPE_SEQUENCE,
                                      BTE_SDP_DE_ARRAY(3),
                                      BTE_SDP_DE_TYPE_STRING, strings,
-                                     -1, -1);
+                                     BTE_SDP_DE_END);
     buffer.resize(size);
     Buffer expected = {
         0x35, 14,
@@ -267,14 +256,16 @@ TEST_F(TestSdpDeFixture, testRead8)
 
 TEST_F(TestSdpDeFixture, testRead16)
 {
-    buffer = {0x09, 0x11, 0x22};
+    buffer = {0x09, 0x81, 0x22};
 
     BteSdpDeReader reader;
     bte_sdp_de_reader_init(&reader, buffer.data());
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT16);
-    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0x1122);
-    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0x1122);
-    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0x1122);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0x8122);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0x8122);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0x8122);
+
+    EXPECT_EQ(bte_sdp_de_reader_read_int16(&reader), -32478);
 
     /* But we cannot read a uint8 out of this */
     EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 0);
@@ -314,6 +305,10 @@ TEST_F(TestSdpDeFixture, testRead64)
     EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), 0);
     EXPECT_EQ(bte_sdp_de_reader_read_int16(&reader), 0);
     EXPECT_EQ(bte_sdp_de_reader_read_int32(&reader), 0);
+
+    /* But we cannot read a UUID out of this */
+    BteSdpDeUuid128 uuid = { 0, };
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid128(&reader), uuid);
 }
 
 TEST_F(TestSdpDeFixture, testRead128)
@@ -425,22 +420,23 @@ TEST_F(TestSdpDeFixture, testReadSequence)
 {
     uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
         BTE_SDP_DE_TYPE_SEQUENCE,
-            BTE_SDP_DE_TYPE_BOOL, false,
             BTE_SDP_DE_TYPE_SEQUENCE,
-                BTE_SDP_DE_TYPE_UINT16, 0x1234,
-                BTE_SDP_DE_TYPE_INT16, -200,
-            BTE_SDP_DE_END,
-            BTE_SDP_DE_TYPE_SEQUENCE,
-                BTE_SDP_DE_TYPE_UUID32, 0x11223344,
-                BTE_SDP_DE_TYPE_UUID16, 0x5566,
-                BTE_SDP_DE_TYPE_CHOICE,
-                    BTE_SDP_DE_TYPE_STRING, "yes",
-                    BTE_SDP_DE_TYPE_STRING, "no",
+                BTE_SDP_DE_TYPE_BOOL, false,
+                BTE_SDP_DE_TYPE_SEQUENCE,
+                    BTE_SDP_DE_TYPE_UINT16, 0x1234,
+                    BTE_SDP_DE_TYPE_INT16, -200,
                 BTE_SDP_DE_END,
-                BTE_SDP_DE_TYPE_INT8, -1,
+                BTE_SDP_DE_TYPE_SEQUENCE,
+                    BTE_SDP_DE_TYPE_UUID32, 0x11223344,
+                    BTE_SDP_DE_TYPE_UUID16, 0x5566,
+                    BTE_SDP_DE_TYPE_CHOICE,
+                        BTE_SDP_DE_TYPE_STRING, "yes",
+                        BTE_SDP_DE_TYPE_STRING, "no",
+                    BTE_SDP_DE_END,
+                    BTE_SDP_DE_TYPE_INT8, -1,
+                BTE_SDP_DE_END,
             BTE_SDP_DE_END,
-        BTE_SDP_DE_END,
-        BTE_SDP_DE_TYPE_UINT8, 42,
+            BTE_SDP_DE_TYPE_UINT8, 42,
         BTE_SDP_DE_END);
     buffer.resize(size);
 
@@ -448,6 +444,10 @@ TEST_F(TestSdpDeFixture, testReadSequence)
     bte_sdp_de_reader_init(&reader, buffer.data());
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
     EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
+
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_BOOL);
     EXPECT_EQ(bte_sdp_de_reader_read_bool(&reader), false);
@@ -460,6 +460,7 @@ TEST_F(TestSdpDeFixture, testReadSequence)
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
     EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID32);
     EXPECT_EQ(bte_sdp_de_reader_read_uuid32(&reader), 0x11223344);
@@ -471,6 +472,7 @@ TEST_F(TestSdpDeFixture, testReadSequence)
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_CHOICE);
     EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_STRING);
     char text[10];
@@ -485,19 +487,26 @@ TEST_F(TestSdpDeFixture, testReadSequence)
     EXPECT_STREQ(text, "no");
     EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
     EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INT8);
     EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), -1);
     EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    /* We return back to the beginning of the sequence */
+    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
+
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INVALID);
     EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
     EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT8);
     EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 42);
     EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
 
-    EXPECT_FALSE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
 }
 
 TEST_F(TestSdpDeFixture, testReadSequenceLeaveEarly)
@@ -518,8 +527,6 @@ TEST_F(TestSdpDeFixture, testReadSequenceLeaveEarly)
                 BTE_SDP_DE_END,
                 BTE_SDP_DE_TYPE_INT8, -1,
             BTE_SDP_DE_END,
-        BTE_SDP_DE_END,
-        BTE_SDP_DE_TYPE_UINT8, 42,
         BTE_SDP_DE_END);
     buffer.resize(size);
 
@@ -527,6 +534,7 @@ TEST_F(TestSdpDeFixture, testReadSequenceLeaveEarly)
     bte_sdp_de_reader_init(&reader, buffer.data());
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
     EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_BOOL);
     EXPECT_FALSE(bte_sdp_de_reader_enter(&reader));
@@ -534,21 +542,58 @@ TEST_F(TestSdpDeFixture, testReadSequenceLeaveEarly)
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
     EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT16);
     EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_SEQUENCE);
     EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+    EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID32);
     EXPECT_TRUE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UUID16);
     EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
 
     EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_INVALID);
     EXPECT_TRUE(bte_sdp_de_reader_leave(&reader));
-    EXPECT_EQ(bte_sdp_de_reader_get_type(&reader), BTE_SDP_DE_TYPE_UINT8);
+
+    EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
     EXPECT_FALSE(bte_sdp_de_reader_leave(&reader));
     EXPECT_FALSE(bte_sdp_de_reader_next(&reader));
+}
+
+TEST_F(TestSdpDeFixture, testReadInvalidCursor)
+{
+    uint32_t size = bte_sdp_de_write(buffer.data(), buffer.size(),
+        BTE_SDP_DE_TYPE_SEQUENCE,
+        BTE_SDP_DE_END);
+    buffer.resize(size);
+
+    BteSdpDeReader reader;
+    bte_sdp_de_reader_init(&reader, buffer.data());
+    EXPECT_TRUE(bte_sdp_de_reader_enter(&reader));
+
+    EXPECT_EQ(bte_sdp_de_reader_read_uint8(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint32(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_uint64(&reader), 0);
+
+    EXPECT_EQ(bte_sdp_de_reader_read_int8(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int16(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int32(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int64(&reader), 0);
+
+    BteSdpDeUuid128 uuid = { 0, };
+    EXPECT_EQ(bte_sdp_de_reader_read_uuid128(&reader), uuid);
+#ifdef __SIZEOF_INT128__
+    EXPECT_EQ(bte_sdp_de_reader_read_uint128(&reader), 0);
+    EXPECT_EQ(bte_sdp_de_reader_read_int128(&reader), 0);
+#endif
+
+    EXPECT_EQ(bte_sdp_de_reader_read_str(&reader, NULL), nullptr);
 }
