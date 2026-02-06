@@ -1,5 +1,3 @@
-find_package(PkgConfig)
-
 if(CMAKE_SYSTEM_NAME MATCHES "Starlet")
     set(PLATFORM_SOURCES
     )
@@ -14,9 +12,16 @@ else()
     message(WARNING "No available platform backend")
 endif()
 
+if(OpenObex_FOUND)
+    list(APPEND EXTRA_LIBS PkgConfig::OpenObex)
+    list(APPEND EXTRA_SOURCES services/openobex.c)
+    add_definitions(-DWITH_OPENOBEX)
+endif()
+
 add_library(bt-embedded STATIC
     ${DRIVERS_SOURCES}
     ${PLATFORM_SOURCES}
+    ${EXTRA_SOURCES}
     acl.c
     bte.c
     client.c

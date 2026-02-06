@@ -26,6 +26,9 @@ add_compile_options(
     ${EXTRA_CFLAGS}
 )
 
+find_package(PkgConfig)
+pkg_check_modules(OpenObex openobex IMPORTED_TARGET)
+
 include(GNUInstallDirs)
 
 configure_file(bt-embedded.pc.in bt-embedded.pc @ONLY)

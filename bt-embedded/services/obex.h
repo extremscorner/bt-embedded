@@ -19,6 +19,22 @@ bool bte_obex_discover(BteClient *client, const BteBdAddr *address,
                        const BteHciConnectParams *params,
                        BteObexDiscoverCb callback, void *userdata);
 
+#ifdef WITH_OPENOBEX
+
+#include <openobex/obex.h>
+/**
+ * Creates a transport for OpenOBEX
+ *
+ * Pass the returned object to OBEX_RegisterCTransport().
+ */
+obex_ctrans_t *bte_openobex_transport();
+
+/* This must be called before OBEX_TransportConnect().
+ */
+void bte_openobex_set_l2cap(obex_t *handle, BteL2cap *l2cap);
+
+#endif /* WITH_OPENOBEX */
+
 #ifdef __cplusplus
 }
 #endif
