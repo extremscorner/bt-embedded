@@ -227,7 +227,7 @@ BteAcl *bte_acl_get_for_address(BteHci *, const BteBdAddr *address)
     BteHciDev *dev = &_bte_hci_dev;
     for (int i = 0; i < BTE_HCI_MAX_ACL; i++) {
         BteAcl *acl = dev->acls[i];
-        if (acl && memcmp(&acl->address, address, sizeof(*address) == 0)) {
+        if (acl && memcmp(&acl->address, address, sizeof(*address)) == 0) {
             return acl;
         }
     }
