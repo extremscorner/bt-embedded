@@ -1461,6 +1461,14 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
     l2cap->userdata = userdata;
     l2cap->psm = psm;
     l2cap->cmd_data.connect.client_cb = callback;
+    if (acl->conn_handle != BTE_CONN_HANDLE_INVALID) {
+        bool ok = l2cap_connection_request(l2cap);
+        if (UNLIKELY(!ok)) {
+            bte_l2cap_unref(l2cap);
+            callback(NULL, NULL, userdata);
+            return;
+        }
+    }
 }
 
 BteL2cap *_bte_l2cap_new_connected(
