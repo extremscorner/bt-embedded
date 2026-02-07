@@ -25,6 +25,8 @@ static int oo_connect(obex_t *handle, void *customdata)
 {
     BteL2cap *l2cap = OBEX_GetCustomData(handle);
 
+    OBEX_SetTransportMTU(handle, bte_l2cap_get_mtu(l2cap),
+                         bte_l2cap_get_remote_mtu(l2cap));
     bte_l2cap_set_userdata(l2cap, handle);
     bte_l2cap_on_message_received(l2cap, message_received_cb);
     return 0;

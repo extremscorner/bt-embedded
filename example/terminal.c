@@ -4,6 +4,7 @@ bool quit_requested = false;
 
 #ifdef __wii__
 
+#include <fat.h>
 #include <gccore.h>
 #include <stdlib.h>
 
@@ -16,6 +17,7 @@ void terminal_init(void)
 {
     VIDEO_Init();
     consoleInit(NULL);
+    fatInitDefault();
 
     SYS_SetResetCallback(on_reset_pressed);
 }
