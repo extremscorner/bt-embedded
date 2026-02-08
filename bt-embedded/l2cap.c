@@ -1654,7 +1654,8 @@ void bte_l2cap_disconnect(BteL2cap *l2cap)
 bool bte_l2cap_create_message(BteL2cap *l2cap, BteBufferWriter *writer,
                               uint16_t size)
 {
-    if (UNLIKELY(l2cap->remote_channel_id == BTE_L2CAP_CHANNEL_ID_NULL)) {
+    if (UNLIKELY(l2cap->remote_channel_id == BTE_L2CAP_CHANNEL_ID_NULL ||
+                 size > l2cap->remote_mtu)) {
         return false;
     }
 
@@ -1664,8 +1665,7 @@ bool bte_l2cap_create_message(BteL2cap *l2cap, BteBufferWriter *writer,
 
 int bte_l2cap_send_message(BteL2cap *l2cap, BteBuffer *buffer)
 {
-    if (UNLIKELY(l2cap->state != BTE_L2CAP_OPEN ||
-                 buffer->total_size > l2cap->remote_mtu)) {
+    if (UNLIKELY(l2cap->state != BTE_L2CAP_OPEN)) {
         bte_buffer_unref(buffer);
         return -1;
     }
