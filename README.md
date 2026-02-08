@@ -131,6 +131,18 @@ and errors.
 - Download and install [devkitPPC](https://devkitpro.org/wiki/Getting_Started)
 - Make sure to install the `devkitppc-cmake` package when using `pacman`
 
+##### 2) (optional) Build `OpenOBEX`
+
+If you want to build the `obex.c` example to test file transfers, you need to
+build the OpenOBEX library. This is easily done by using the version at [this
+branch](https://gitlab.com/mardy/mainline/-/tree/wii), which can be compiled as
+follows:
+
+    mkdir build && cd build
+    cmake -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" \
+          -DCMAKE_BUILD_TYPE=Debug -DOPENOBEX_INET=OFF -DOPENOBEX_FD=OFF ..
+    make && sudo -E make install
+
 ##### 3) Build `libbt-embedded.a`
 
 1. `mkdir build && cd build`
