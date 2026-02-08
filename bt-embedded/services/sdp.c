@@ -461,6 +461,7 @@ static int find_seq_start_offset(const uint8_t *de, uint8_t depth,
                 /* This *must* be a sequence! */
                 bool ok = bte_sdp_de_reader_enter(&reader);
                 assert(ok);
+                UNUSED(ok);
             }
         } else {
             bte_sdp_de_reader_next(&reader);
