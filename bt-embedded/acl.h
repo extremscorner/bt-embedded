@@ -24,6 +24,7 @@ struct bte_acl_t {
     BteBdAddr address;
     BteConnHandle conn_handle;
     uint8_t encryption_mode;
+    bool aunthentication_requested : 1;
 
     BteBuffer *fragmented_message;
     uint16_t fragmented_message_size;
@@ -48,8 +49,13 @@ BteAcl *bte_acl_get_for_address(BteHci *hci, const BteBdAddr *address);
 BteAcl *bte_acl_ref(BteAcl *acl);
 void bte_acl_unref(BteAcl *acl);
 
+typedef uint32_t BteAclConnectFlags;
+#define BTE_ACL_CONNECT_FLAG_NONE (BteAclConnectFlags)0
+#define BTE_ACL_CONNECT_FLAG_AUTH (BteAclConnectFlags)1
+
 /* Upon completion, emits the connected_cb event */
-void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params);
+void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params,
+                     BteAclConnectFlags flags);
 void bte_acl_disconnect(BteAcl *acl);
 
 #define BTE_ACL_BROADCAST_PTP    (uint8_t)0

@@ -86,10 +86,10 @@ public:
     static void newOutgoing(
         Client &client, const BteBdAddr &address, BteL2capPsm psm,
         const std::optional<BteHciConnectParams> &params,
-        const ConnectCb &cb) {
+        BteL2CapConnectFlags flags, const ConnectCb &cb) {
         auto *f = new ConnectCb(cb);
         bte_l2cap_new_outgoing(client.m_client, &address, psm,
-                               params ? &params.value() : nullptr,
+                               params ? &params.value() : nullptr, flags,
                                &L2cap::Callbacks::connect, f);
     }
 
@@ -337,12 +337,13 @@ public:
     static bool newConfigured(
         Client &client, const BteBdAddr &address, BteL2capPsm psm,
         const std::optional<BteHciConnectParams> &params,
+        BteL2CapConnectFlags flags,
         const std::optional<ConfigureParams> &conf,
         const NewConfiguredCb &cb) {
         auto *f = new NewConfiguredCb(cb);
         return bte_l2cap_new_configured(
             client.m_client, &address, psm,
-            params ? &params.value() : nullptr,
+            params ? &params.value() : nullptr, flags,
             conf ? &conf.value().p : nullptr,
             &L2cap::Callbacks::new_configured, f);
     }

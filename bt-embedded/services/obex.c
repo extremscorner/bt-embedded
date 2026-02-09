@@ -128,8 +128,9 @@ bool bte_obex_discover(BteClient *client, const BteBdAddr *address,
     dd->callback = callback;
     dd->userdata = userdata;
 
+    BteL2CapConnectFlags flags = BTE_L2CAP_CONNECT_FLAG_NONE;
     bool ok = bte_l2cap_new_configured(client, address, BTE_L2CAP_PSM_SDP,
-                                       params, NULL, new_configured_cb, dd);
+                                       params, flags, NULL, new_configured_cb, dd);
     if (UNLIKELY(!ok)) {
         bte_free(dd);
         return false;

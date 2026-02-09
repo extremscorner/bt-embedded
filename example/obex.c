@@ -192,7 +192,7 @@ static void obex_discover_cb(BteClient *client, const BteObexDiscoverReply *repl
     if (reply->opp_l2cap_psm == 0) return;
 
     bool ok = bte_l2cap_new_configured(client, &s_peerAddress,
-                                       reply->opp_l2cap_psm, NULL, NULL,
+                                       reply->opp_l2cap_psm, NULL, 0, NULL,
                                        new_configured_cb, NULL);
     printf("bte_l2cap_new_configured returned %d\n", ok);
 }

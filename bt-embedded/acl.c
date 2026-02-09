@@ -259,6 +259,16 @@ static void connect_status_cb(BteHci *hci, const BteHciReply *reply,
     }
 }
 
+static void auth_requested_cb(
+    BteHci *hci, const BteHciAuthRequestedReply *reply, void *userdata)
+{
+    BteAcl *acl = userdata;
+    acl->connected_cb(acl, reply->status);
+    if (reply->status != 0) {
+        bte_acl_unref(acl);
+    }
+}
+
 static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
                        void *userdata)
 {
@@ -266,6 +276,11 @@ static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
     if (reply->status == 0) {
         acl->conn_handle = reply->conn_handle;
         acl->encryption_mode = reply->encryption_mode;
+        if (acl->aunthentication_requested) {
+            bte_hci_auth_requested(acl->hci, acl->conn_handle, NULL,
+                                   auth_requested_cb, acl);
+            return;
+        }
     }
     acl->connected_cb(acl, reply->status);
     if (reply->status != 0) {
@@ -273,8 +288,12 @@ static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
     }
 }
 
-void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params)
+void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params,
+                     BteAclConnectFlags flags)
 {
+    if (flags & BTE_ACL_CONNECT_FLAG_AUTH) {
+        acl->aunthentication_requested = true;
+    }
     bte_hci_create_connection(acl->hci, &acl->address, params,
                               connect_status_cb, connect_cb, acl);
 }

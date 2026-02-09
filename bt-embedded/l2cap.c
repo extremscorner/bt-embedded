@@ -1434,6 +1434,7 @@ static void l2cap_setup_acl(BteAcl *acl)
 
 void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
                             BteL2capPsm psm, const BteHciConnectParams *params,
+                            BteL2CapConnectFlags flags,
                             BteL2capConnectCb callback, void *userdata)
 {
     BteL2cap *l2cap = bte_l2cap_new();
@@ -1449,7 +1450,11 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
         l2cap_setup_acl(acl);
         l2cap->acl = bte_acl_ref(acl);
         if (!params) params = default_connect_params(hci);
-        bte_acl_connect(acl, params);
+        BteAclConnectFlags acl_flags = 0;
+        if (flags & BTE_L2CAP_CONNECT_FLAG_AUTH) {
+            acl_flags |= BTE_ACL_CONNECT_FLAG_AUTH;
+        }
+        bte_acl_connect(acl, params, acl_flags);
     }
 
     if (UNLIKELY(!acl_l2cap_add_client(L(acl), l2cap))) {
@@ -1794,7 +1799,8 @@ static void new_configured_connect_cb(
 
 bool bte_l2cap_new_configured(
     BteClient *client, const BteBdAddr *address, BteL2capPsm psm,
-    const BteHciConnectParams *params, const BteL2capConfigureParams *conf,
+    const BteHciConnectParams *params, BteL2CapConnectFlags flags,
+    const BteL2capConfigureParams *conf,
     BteL2capNewConfiguredCb callback, void *userdata)
 {
     NewConfiguredData *cd = bte_malloc(sizeof(NewConfiguredData));
@@ -1804,7 +1810,7 @@ bool bte_l2cap_new_configured(
     cd->reply_sent = false;
     cd->callback = callback;
     cd->userdata = userdata;
-    bte_l2cap_new_outgoing(client, address, psm, params,
+    bte_l2cap_new_outgoing(client, address, psm, params, flags,
                            new_configured_connect_cb, cd);
     return true;
 }

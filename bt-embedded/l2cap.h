@@ -50,12 +50,17 @@ typedef struct {
 typedef void (*BteL2capConnectCb)(
     BteL2cap *l2cap, const BteL2capConnectionResponse *reply, void *userdata);
 
+typedef uint32_t BteL2CapConnectFlags;
+#define BTE_L2CAP_CONNECT_FLAG_NONE (BteL2CapConnectFlags)0
+#define BTE_L2CAP_CONNECT_FLAG_AUTH (BteL2CapConnectFlags)1
+
 /**
  * \note The callback can be invoked more than once, if \a result is \c
  *       BTE_L2CAP_CONN_RESP_RES_PENDING.
  */
 void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
                             BteL2capPsm psm, const BteHciConnectParams *params,
+                            BteL2CapConnectFlags flags,
                             BteL2capConnectCb callback, void *userdata);
 
 BteL2cap *bte_l2cap_ref(BteL2cap *l2cap);
@@ -244,7 +249,8 @@ typedef void (*BteL2capNewConfiguredCb)(
  * callback is invoked. */
 bool bte_l2cap_new_configured(
     BteClient *client, const BteBdAddr *address, BteL2capPsm psm,
-    const BteHciConnectParams *params, const BteL2capConfigureParams *conf,
+    const BteHciConnectParams *params, BteL2CapConnectFlags flags,
+    const BteL2capConfigureParams *conf,
     BteL2capNewConfiguredCb callback, void *userdata);
 
 /* For testing use only: reset the static variables for the channel and message

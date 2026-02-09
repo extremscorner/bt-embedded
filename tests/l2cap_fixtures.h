@@ -112,7 +112,7 @@ protected:
             ASSERT_TRUE(l2cap.has_value());
             newL2cap = l2cap.value();
         };
-        Bte::L2cap::newOutgoing(m_client, address, psm, {}, onConnected);
+        Bte::L2cap::newOutgoing(m_client, address, psm, {}, 0, onConnected);
         /* Send the statue reply for HCI create connection */
         uint8_t status = 0;
         m_backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x5, 0x4});
@@ -347,6 +347,17 @@ protected:
             low(handle), high(handle)} +
             address + Buffer{link_type, enc_mode});
         m_connections.insert(handle);
+    }
+
+    Buffer makeHciAuthRequested(BteConnHandle handle) {
+        return { 0x11, 0x4, 2, low(handle), high(handle) };
+    }
+
+    void sendHciAuthComplete(BteConnHandle handle, uint8_t status = 0) {
+        const uint8_t eventSize = 1 + 2;
+        m_backend.sendEvent({
+            HCI_AUTH_COMPLETE, eventSize, status, low(handle), high(handle)
+        });
     }
 
     Buffer makeHciCreateDisconnection(const BteBdAddr &address,

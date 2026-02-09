@@ -22,7 +22,7 @@ TEST_F(TestL2capConnect, testOutgoingNoHciParams) {
         replies.push_back(reply);
     };
     BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
-    L::newOutgoing(m_client, address, psm, {}, onConnected);
+    L::newOutgoing(m_client, address, psm, {}, 0, onConnected);
 
     /* Default values */
     BtePacketType packetType = BTE_PACKET_TYPE_DM1 | BTE_PACKET_TYPE_DH1;
@@ -78,7 +78,7 @@ TEST_F(TestL2capConnect, testOutgoingWithHciParams) {
         pageScanRepMode,
         allowRoleSwitch,
     };
-    L::newOutgoing(m_client, address, psm, params, onConnected);
+    L::newOutgoing(m_client, address, psm, params, 0, onConnected);
 
     std::vector<Buffer> expectedCommands {
         makeHciCreateConnection(address, packetType, pageScanRepMode,
@@ -109,6 +109,64 @@ TEST_F(TestL2capConnect, testOutgoingWithHciParams) {
     ASSERT_EQ(replies, expectedReplies);
 }
 
+TEST_F(TestL2capConnect, testOutgoingWithAuthentication) {
+    using L = Bte::L2cap;
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    std::vector<BteL2capConnectionResponse> replies;
+    auto onConnected = [&](std::optional<Bte::L2cap> l2cap,
+                           const BteL2capConnectionResponse &reply) {
+        ASSERT_TRUE(l2cap.has_value());
+        replies.push_back(reply);
+    };
+    BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
+    BteL2CapConnectFlags flags = BTE_L2CAP_CONNECT_FLAG_AUTH;
+    L::newOutgoing(m_client, address, psm, {}, flags, onConnected);
+
+    /* Default values */
+    BtePacketType packetType = BTE_PACKET_TYPE_DM1 | BTE_PACKET_TYPE_DH1;
+    uint16_t clockOffset = 0;
+    uint8_t pageScanRepMode = 1;
+    bool roleSwitch = true;
+    std::vector<Buffer> expectedCommands {
+        makeHciCreateConnection(address, packetType, pageScanRepMode,
+                                clockOffset, roleSwitch),
+    };
+    ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
+
+    /* Send the status reply for HCI create connection */
+    uint8_t status = 0;
+    m_backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x5, 0x4});
+    bte_handle_events();
+    /* Send the actual reply */
+    sendHciConnectionComplete(address);
+    bte_handle_events();
+
+    /* We should have requested the authentication */
+    expectedCommands.push_back(makeHciAuthRequested(m_connHandle));
+    ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
+
+    /* Send the command status... */
+    m_backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x11, 0x4});
+    bte_handle_events();
+    /* ..And the reply */
+    sendHciAuthComplete(m_connHandle);
+    bte_handle_events();
+
+    /* Read the L2CAP connection request */
+    uint8_t reqId = m_cmdId++;
+    Buffer expectedData = makeConnectRequest(reqId, m_connHandle, psm);
+    ASSERT_EQ(m_backend.lastData(), expectedData);
+
+    /* Send the L2cap connect response */
+    sendConnectResponse(reqId);
+    bte_handle_events();
+
+    std::vector<BteL2capConnectionResponse> expectedReplies = {
+        {0x40, 0x40, 0, 0},
+    };
+    ASSERT_EQ(replies, expectedReplies);
+}
+
 TEST_F(TestL2capConnect, testOutgoingPending) {
     using L = Bte::L2cap;
     BteBdAddr address = {1, 2, 3, 4, 5, 6};
@@ -120,7 +178,7 @@ TEST_F(TestL2capConnect, testOutgoingPending) {
         replies.push_back(reply);
     };
     BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
-    L::newOutgoing(m_client, address, psm, {}, onConnected);
+    L::newOutgoing(m_client, address, psm, {}, 0, onConnected);
 
     /* Default values */
     BtePacketType packetType = BTE_PACKET_TYPE_DM1 | BTE_PACKET_TYPE_DH1;
@@ -173,7 +231,7 @@ TEST_F(TestL2capConnect, testOutgoingHciError) {
         replies.push_back(reply);
     };
     BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
-    L::newOutgoing(m_client, address, psm, {}, onConnected);
+    L::newOutgoing(m_client, address, psm, {}, 0, onConnected);
 
     /* Send the status reply for HCI create connection */
     uint8_t status = 3; /* HW failure */
@@ -204,7 +262,7 @@ TEST_F(TestL2capConnect, testOutgoingDataError) {
         replies.push_back(reply);
     };
     BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
-    L::newOutgoing(m_client, address, psm, {}, onConnected);
+    L::newOutgoing(m_client, address, psm, {}, 0, onConnected);
 
     int sendDataCount = 0;
     m_backend.onSendData([&](BteBuffer *) {
@@ -242,7 +300,7 @@ TEST_F(TestL2capConnect, testOutgoingResponseTooShortError) {
         replies.push_back(reply);
     };
     BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
-    L::newOutgoing(m_client, address, psm, {}, onConnected);
+    L::newOutgoing(m_client, address, psm, {}, 0, onConnected);
 
     /* Send the status reply for HCI create connection */
     uint8_t status = 0;
@@ -308,7 +366,7 @@ TEST_F(TestL2capConnect, testOutgoingResponseError) {
         replies.push_back(reply);
     };
     BteL2capPsm psm = BTE_L2CAP_PSM_SDP;
-    L::newOutgoing(m_client, address, psm, {}, onConnected);
+    L::newOutgoing(m_client, address, psm, {}, 0, onConnected);
 
     /* Send the status reply for HCI create connection */
     uint8_t status = 0;
