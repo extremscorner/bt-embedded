@@ -876,6 +876,93 @@ TEST(Commands, testAuthRequested) {
     ASSERT_EQ(_bte_hci_dev.num_pending_commands, 0);
 }
 
+TEST(Commands, testAuthRequestedWithEvents) {
+    /* Same as the above, but here we test that link key and pin code
+     * requests during authentication are properly handled */
+    MockBackend backend;
+    Bte::Client client;
+    auto &hci = client.hci();
+
+    BteConnHandle conn_handle = 0x1234;
+
+    hci.onLinkKeyRequest([&](const BteBdAddr &address) {
+        hci.linkKeyReqNegReply(address, {});
+        return true;
+    });
+    hci.onPinCodeRequest([&](const BteBdAddr &address) {
+        Buffer pin = Buffer{ 'a', 'b', 'c' } + address;
+        hci.pinCodeReqReply(address, pin, {});
+        return true;
+    });
+
+    std::vector<BteHciAuthRequestedReply> replies;
+    std::vector<BteHciReply> statusReplies;
+    hci.authRequested(conn_handle,
+                      [&](const BteHciReply &reply) {
+            statusReplies.push_back(reply);
+        },
+        [&](const BteHciAuthRequestedReply &reply) {
+            replies.push_back(reply);
+        });
+
+    Buffer expectedCommand{0x11, 0x4, 2, 0x34, 0x12};
+    ASSERT_EQ(backend.lastCommand(), expectedCommand);
+
+    /* Send the status reply */
+    uint8_t status = 0;
+    backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x11, 0x4});
+    bte_handle_events();
+
+    /* Send a LinkKeyRequest event */
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    uint8_t *b = address.bytes;
+    backend.sendEvent({
+        HCI_LINK_KEY_REQUEST, 6, b[0], b[1], b[2], b[3], b[4], b[5]
+    });
+    bte_handle_events();
+
+    /* Check that we replied with a negative reply */
+    expectedCommand = Buffer{0xc, 0x4, 6} + address;
+    ASSERT_EQ(backend.lastCommand(), expectedCommand);
+
+    /* Command complete for the neg reply command */
+    backend.sendEvent(Buffer{HCI_COMMAND_COMPLETE, 10, 1, 0xc, 0x4, status} +
+                      address);
+    bte_handle_events();
+
+    /* Emit the PinCodeRequest event */
+    backend.sendEvent({
+        HCI_PIN_CODE_REQUEST, 6, b[0], b[1], b[2], b[3], b[4], b[5]
+    });
+    bte_handle_events();
+
+    /* Check that we replied with the PIN code */
+    expectedCommand = Buffer{0xd, 0x4, 6 + 1 + 16} + address +
+        Buffer{9, 'a', 'b', 'c'} + address;
+    Buffer lastCommand = backend.lastCommand();
+    Buffer interestingPart(lastCommand.begin(),
+                           lastCommand.begin() + expectedCommand.size());
+    ASSERT_EQ(interestingPart, expectedCommand);
+
+    /* Command complete for the PIN code command */
+    backend.sendEvent(Buffer{HCI_COMMAND_COMPLETE, 10, 1, 0xd, 0x4, status} +
+                      address);
+    bte_handle_events();
+
+    /* Send the completed event */
+    backend.sendEvent({HCI_AUTH_COMPLETE, 3, status, 0x34, 0x12});
+    bte_handle_events();
+
+    std::vector<BteHciReply> expectedStatusReplies = {{ 0 }};
+    ASSERT_EQ(statusReplies, expectedStatusReplies);
+
+    std::vector<BteHciAuthRequestedReply> expectedReplies = {
+        {status, conn_handle},
+    };
+    ASSERT_EQ(replies, expectedReplies);
+    ASSERT_EQ(_bte_hci_dev.num_pending_commands, 0);
+}
+
 TEST(Commands, testReadRemoteName) {
     MockBackend backend;
     Bte::Client client;
