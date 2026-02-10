@@ -768,10 +768,19 @@ static void remote_name_req_complete_event_cb(BteBuffer *buffer)
 static void read_remote_name_status_cb(BteHci *hci, uint8_t status,
                                        BteHciPendingCommand *pc)
 {
-    if (status != 0) goto error;
-
     struct _bte_hci_tmpdata_read_remote_name_t *tmpdata =
         &hci->last_async_cmd_data.read_remote_name;
+    if (status != 0) {
+        if (!pc->command_cb.cmd_status.client_cb) {
+            BteHciReadRemoteNameReply reply;
+            reply.status = status;
+            memcpy(&reply.address, &tmpdata->address, 6);
+            reply.name[0] = 0;
+            tmpdata->client_cb(hci, &reply, pc->userdata);
+        }
+        goto error;
+    }
+
     BteDataMatcher matcher;
     bte_data_matcher_init(&matcher);
     uint8_t event_type = HCI_REMOTE_NAME_REQ_COMPLETE;

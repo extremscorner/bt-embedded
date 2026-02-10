@@ -924,6 +924,35 @@ TEST(Commands, testReadRemoteName) {
     ASSERT_EQ(_bte_hci_dev.num_pending_commands, 0);
 }
 
+TEST(Commands, testReadRemoteNameError) {
+    MockBackend backend;
+    Bte::Client client;
+    auto &hci = client.hci();
+
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    uint8_t page_scan_rep_mode = 1;
+    uint16_t clock_offset = BTE_HCI_CLOCK_OFFSET_INVALID;
+
+    std::vector<BteHciReadRemoteNameReply> replies;
+    std::vector<BteHciReply> statusReplies;
+    hci.readRemoteName(address, page_scan_rep_mode, clock_offset,
+                       {},
+        [&](const BteHciReadRemoteNameReply &reply) {
+            replies.push_back(reply);
+        });
+
+    /* Send the error status reply */
+    uint8_t status = HCI_HW_FAILURE;
+    backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x19, 0x4});
+    bte_handle_events();
+
+    std::vector<BteHciReadRemoteNameReply> expectedReplies = {
+        {status, address, ""},
+    };
+    ASSERT_EQ(replies, expectedReplies);
+    ASSERT_EQ(_bte_hci_dev.num_pending_commands, 0);
+}
+
 TEST(Commands, testReadRemoteFeatures) {
     MockBackend backend;
     Bte::Client client;

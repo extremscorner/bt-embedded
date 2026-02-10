@@ -238,6 +238,8 @@ public:
 
         template <Tag t, typename ReplyType, typename CbType>
         auto wrap(const CbType &cb) {
+            typedef void (*ReturnType)(BteHci *, ReplyType *, void *);
+            if (!cb) return ReturnType(nullptr);
             auto commandCb = &TaggedCallbackHelper<t, ReplyType, CbType>::commandCb;
             m_callbacks[t] = cb;
             return commandCb;
@@ -249,6 +251,8 @@ public:
         template <Tag t, typename CbType>
         auto wrap(const CbType &cb) {
             using ReplyType = typename extract_argument<CbType>::type;
+            typedef void (*ReturnType)(BteHci *, ReplyType *, void *);
+            if (!cb) return ReturnType(nullptr);
             auto commandCb = &TaggedCallbackHelper<t, ReplyType, CbType>::commandCb;
             m_callbacks[t] = cb;
             return commandCb;
