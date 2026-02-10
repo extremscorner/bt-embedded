@@ -697,7 +697,7 @@ void bte_hci_pin_code_req_reply(BteHci *hci, const BteBdAddr *address,
     data += sizeof(*address);
     data[0] = len; data++;
     memcpy(data, pin, len);
-    data[len] = 0; /* Just to be on the safe side */
+    if (len < 16) data[len] = 0; /* Just to be on the safe side */
     _bte_hci_send_command(b);
 }
 
