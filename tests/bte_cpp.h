@@ -22,6 +22,11 @@ inline bool operator==(const BteBdAddr &a, const BteBdAddr &b)
     return memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0;
 }
 
+inline bool operator==(const BteLinkKey &a, const BteLinkKey &b)
+{
+    return memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0;
+}
+
 template <> struct std::hash<BteBdAddr> {
     size_t operator()(const BteBdAddr &a) const noexcept {
         return std::hash<std::string>()(
@@ -387,6 +392,14 @@ public:
         void linkKeyReqNegReply(const BteBdAddr &address,
                                 const LinkKeyReqReplyCb &cb) {
             bte_hci_link_key_req_neg_reply(m_hci, &address, wrap<TAG>(cb), this);
+        }
+
+        using LinkKeyNotificationCb =
+            std::function<bool(const BteHciLinkKeyNotificationData &data)>;
+        void onLinkKeyNotification(const LinkKeyNotificationCb &cb) {
+            m_linkKeyNotificationCb = cb;
+            bte_hci_on_link_key_notification(
+                m_hci, &Hci::Callbacks::linkKeyNotification);
         }
 
         using PinCodeRequestCb = std::function<bool(const BteBdAddr &address)>;
@@ -786,6 +799,11 @@ public:
                                        void *cb_data) {
                 return _this(cb_data)->m_linkKeyRequestCb(*address);
             }
+            static bool linkKeyNotification(
+                BteHci *hci, const BteHciLinkKeyNotificationData *data,
+                void *cb_data) {
+                return _this(cb_data)->m_linkKeyNotificationCb(*data);
+            }
             static bool pinCodeRequest(BteHci *hci, const BteBdAddr *address,
                                        void *cb_data) {
                 return _this(cb_data)->m_pinCodeRequestCb(*address);
@@ -852,6 +870,7 @@ public:
         DisconnectionCompleteCb m_disconnectionCompleteCb;
         ConnectionRequestCb m_connectionRequestCb;
         LinkKeyRequestCb m_linkKeyRequestCb;
+        LinkKeyNotificationCb m_linkKeyNotificationCb;
         PinCodeRequestCb m_pinCodeRequestCb;
         ModeChangeCb m_modeChangeCb;
         VendorEventCb m_vendorEventCb;

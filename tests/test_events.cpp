@@ -173,6 +173,46 @@ TEST(Events, testLinkKeyRequested)
     ASSERT_EQ(calls, expectedCalls);
 }
 
+TEST(Events, testLinkKeyNotification)
+{
+    MockBackend backend;
+    Bte::Client client0, client1, client2;
+    auto &hci0 = client0.hci();
+    auto &hci1 = client1.hci();
+    auto &hci2 = client2.hci();
+
+    /* The first int is the index of the hci instance */
+    using Call = std::tuple<int, BteHciLinkKeyNotificationData>;
+    std::vector<Call> calls;
+    hci0.onLinkKeyNotification([&](const BteHciLinkKeyNotificationData &data) {
+        calls.push_back({0, data});
+        return false;
+    });
+    hci1.onLinkKeyNotification([&](const BteHciLinkKeyNotificationData &data) {
+        calls.push_back({1, data});
+        return true;
+    });
+    hci2.onLinkKeyNotification([&](const BteHciLinkKeyNotificationData &data) {
+        calls.push_back({2, data});
+        return true;
+    });
+
+    /* Emit the LinkKeyNotification event */
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    BteLinkKey key = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 6, 5, 4, 3, 2, 1};
+    uint8_t key_type = 2;
+    backend.sendEvent(Buffer{HCI_LINK_KEY_NOTIFICATION, 6 + 16 + 1} +
+                      address + key + Buffer{key_type});
+    bte_handle_events();
+
+    /* The second handler returned true, so the third should not be invoked */
+    std::vector<Call> expectedCalls = {
+        {0, {address, key, key_type}},
+        {1, {address, key, key_type}},
+    };
+    ASSERT_EQ(calls, expectedCalls);
+}
+
 TEST(Events, testPinCodeRequested)
 {
     MockBackend backend;

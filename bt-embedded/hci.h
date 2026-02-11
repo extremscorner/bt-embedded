@@ -178,6 +178,22 @@ void bte_hci_link_key_req_neg_reply(BteHci *hci, const BteBdAddr *address,
                                     BteHciLinkKeyReqReplyCb callback,
                                     void *userdata);
 
+typedef struct {
+   BteBdAddr address;
+   BteLinkKey key;
+   uint8_t key_type;
+} BteHciLinkKeyNotificationData;
+
+#define BTE_HCI_LINK_KEY_TYPE_COMBINATION (uint8_t)0
+#define BTE_HCI_LINK_KEY_TYPE_LOCAL       (uint8_t)1
+#define BTE_HCI_LINK_KEY_TYPE_REMOTE      (uint8_t)2
+
+/* Return true if this client will handle the event */
+typedef bool (*BteHciLinkKeyNotificationCb)(
+    BteHci *hci, const BteHciLinkKeyNotificationData *data, void *userdata);
+void bte_hci_on_link_key_notification(
+    BteHci *hci, BteHciLinkKeyNotificationCb callback);
+
 /* Return true if this client will handle the event */
 typedef bool (*BteHciPinCodeRequestCb)(BteHci *hci,
                                        const BteBdAddr *address,

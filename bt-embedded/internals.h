@@ -232,6 +232,7 @@ struct bte_client_t {
         BteHciDisconnectionCompleteCb disconnection_complete_cb;
         BteHciConnectionRequestCb connection_request_cb;
         BteHciLinkKeyRequestCb link_key_request_cb;
+        BteHciLinkKeyNotificationCb link_key_notification_cb;
         BteHciPinCodeRequestCb pin_code_request_cb;
         BteHciVendorEventCb vendor_event_cb;
 

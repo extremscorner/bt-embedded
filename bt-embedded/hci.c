@@ -661,6 +661,34 @@ void bte_hci_link_key_req_neg_reply(BteHci *hci, const BteBdAddr *address,
     _bte_hci_send_command(b);
 }
 
+static bool client_handle_link_key_notification(BteHci *hci, void *cb_data)
+{
+    const BteHciLinkKeyNotificationData *data = cb_data;
+    return hci->link_key_notification_cb &&
+        hci->link_key_notification_cb(hci, data, hci_userdata(hci));
+}
+
+static void link_key_notification_event_cb(BteBuffer *buffer)
+{
+    uint8_t *data = buffer->data + HCI_CMD_EVENT_POS_DATA;
+    BteHciLinkKeyNotificationData event;
+    event.address = *(BteBdAddr*)data;
+    data += sizeof(BteBdAddr);
+    event.key = *(BteLinkKey*)data;
+    data += sizeof(BteLinkKey);
+    event.key_type = data[0];
+    _bte_hci_dev_foreach_hci_client(client_handle_link_key_notification,
+                                    &event);
+}
+
+void bte_hci_on_link_key_notification(
+    BteHci *hci, BteHciLinkKeyNotificationCb callback)
+{
+    hci->link_key_notification_cb = callback;
+    _bte_hci_dev_install_event_handler(HCI_LINK_KEY_NOTIFICATION,
+                                       link_key_notification_event_cb);
+}
+
 static bool client_handle_pin_code_request(BteHci *hci, void *cb_data)
 {
     const BteBdAddr *address = cb_data;
