@@ -71,6 +71,7 @@ void *bte_l2cap_get_userdata(BteL2cap *l2cap);
 
 BteConnHandle bte_l2cap_get_connection_handle(BteL2cap *l2cap);
 BteL2capPsm bte_l2cap_get_psm(BteL2cap *l2cap);
+const BteBdAddr *bte_l2cap_get_address(BteL2cap *l2cap);
 uint16_t bte_l2cap_get_mtu(BteL2cap *l2cap);
 uint16_t bte_l2cap_get_remote_mtu(BteL2cap *l2cap);
 BteClient *bte_l2cap_get_client(BteL2cap *l2cap);

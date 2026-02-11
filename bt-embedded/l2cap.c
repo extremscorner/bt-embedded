@@ -1537,6 +1537,12 @@ BteL2capPsm bte_l2cap_get_psm(BteL2cap *l2cap)
     return l2cap->psm;
 }
 
+const BteBdAddr *bte_l2cap_get_address(BteL2cap *l2cap)
+{
+    assert(l2cap != NULL);
+    return &l2cap->acl->address;
+}
+
 uint16_t bte_l2cap_get_mtu(BteL2cap *l2cap)
 {
     assert(l2cap != NULL);
