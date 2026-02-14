@@ -50,6 +50,11 @@ typedef struct {
     uint8_t reserved;
     BteClassOfDevice class_of_device;
     uint16_t clock_offset;
+    /* Only set if inquiry mode is BTE_HCI_INQUIRY_MODE_RSSI: */
+    uint8_t rssi;
+    /* Only set if inquiry mode is BTE_HCI_INQUIRY_MODE_EXTENDED (currently not
+     * implemented) */
+    void *extended_response;
 } BTE_PACKED BteHciInquiryResponse;
 
 typedef struct {
@@ -574,6 +579,7 @@ void bte_hci_write_inquiry_scan_type(BteHci *hci, uint8_t inquiry_scan_type,
 
 #define BTE_HCI_INQUIRY_MODE_STANDARD (uint8_t)0
 #define BTE_HCI_INQUIRY_MODE_RSSI     (uint8_t)1
+#define BTE_HCI_INQUIRY_MODE_EXTENDED (uint8_t)2 /* TODO */
 
 typedef struct {
     uint8_t status;

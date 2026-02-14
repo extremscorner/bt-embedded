@@ -151,7 +151,7 @@ static void inquiry_result_cb(BteBuffer *buffer)
 {
     BteHciDev *dev = &_bte_hci_dev;
 
-    uint8_t *data = buffer->data + HCI_CMD_REPLY_POS_HDR_LEN;
+    uint8_t *data = buffer->data + HCI_CMD_EVENT_POS_DATA;
     int num_responses = data[0];
     data++;
 
@@ -159,6 +159,9 @@ static void inquiry_result_cb(BteBuffer *buffer)
                       sizeof(BteHciInquiryResponse), 32,
                       dev->inquiry.num_responses, num_responses);
     if (UNLIKELY(!dev->inquiry.responses)) return;
+
+    uint8_t event_code = buffer->data[HCI_CMD_EVENT_POS_CODE];
+    bool has_rssi = event_code == HCI_INQUIRY_RESULT_WITH_RSSI;
 
     BteHciInquiryResponse *responses = dev->inquiry.responses;
     int i_tail = dev->inquiry.num_responses;
@@ -169,14 +172,24 @@ static void inquiry_result_cb(BteBuffer *buffer)
         ptr += sizeof(r->address) * num_responses;
         r->page_scan_rep_mode = ptr[i];
         ptr += num_responses;
-        r->page_scan_period_mode = ptr[i];
-        ptr += num_responses;
+        if (!has_rssi) {
+            r->page_scan_period_mode = ptr[i];
+            ptr += num_responses;
+        }
         r->reserved = ptr[i];
         ptr += num_responses;
         int cod_size = sizeof(r->class_of_device);
         memcpy(&r->class_of_device, ptr + cod_size * i, cod_size);
         ptr += cod_size * num_responses;
         r->clock_offset = le16toh(*((uint16_t*)ptr + i));
+        ptr += sizeof(r->clock_offset) * num_responses;
+        if (has_rssi) {
+            r->rssi = ptr[i];
+            ptr += num_responses;
+        } else {
+            r->rssi = 0;
+        }
+        r->extended_response = NULL;
         /* Check if the record is a duplicate */
         bool duplicate = false;
         for (int j = 0; j < dev->inquiry.num_responses; j++) {
@@ -1683,6 +1696,10 @@ void bte_hci_write_inquiry_mode(BteHci *hci, uint8_t inquiry_mode,
     if (UNLIKELY(!b)) return;
     b->data[HCI_CMD_HDR_LEN] = inquiry_mode;
     _bte_hci_send_command(b);
+    if (inquiry_mode == BTE_HCI_INQUIRY_MODE_RSSI) {
+        _bte_hci_dev_install_event_handler(HCI_INQUIRY_RESULT_WITH_RSSI,
+                                           inquiry_result_cb);
+    }
 }
 
 static void read_page_scan_type_cb(BteHci *hci, BteBuffer *buffer,
