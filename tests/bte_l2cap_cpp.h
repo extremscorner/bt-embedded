@@ -472,6 +472,15 @@ public:
             m_server, &L2capServer::Callbacks::onConnected, this);
     }
 
+    using ConnectionRequestCb = Client::Hci::ConnectionRequestCb;
+    void onConnectionRequest(const ConnectionRequestCb &cb)
+    {
+        m_onConnectionRequest = cb;
+        bte_l2cap_server_on_connection_request(
+            m_server,
+            cb ? &L2capServer::Callbacks::onConnectionRequest : nullptr, this);
+    }
+
 private:
     struct Callbacks {
         static void onConnected(BteL2capServer *l2cap_server, BteL2cap *l2cap,
@@ -481,9 +490,16 @@ private:
             if (_this->m_onConnected)
                 _this->m_onConnected(l2cap_cpp);
         }
+        static bool onConnectionRequest(
+            BteHci *hci, const BteBdAddr *address, const BteClassOfDevice *cod,
+            uint8_t link_type, void *d) {
+            L2capServer *_this = static_cast<L2capServer*>(d);
+            return _this->m_onConnectionRequest(*address, *cod, link_type);
+        }
     };
     BteL2capServer *m_server;
     ConnectedCb m_onConnected;
+    ConnectionRequestCb m_onConnectionRequest;
 };
 
 } // namespace Bte

@@ -353,3 +353,36 @@ TEST_F(TestL2capServer, testManyOk)
     ASSERT_EQ(l2cap1.psm(), BTE_L2CAP_PSM_HID_CTRL);
     ASSERT_EQ(l2cap1.connectionHandle(), m_connHandle);
 }
+
+TEST_F(TestL2capServer, testAcceptCallback)
+{
+    Bte::L2capServer server(*m_client, BTE_L2CAP_PSM_SDP);
+    using ConnectionRecord = std::tuple<BteBdAddr, BteClassOfDevice, uint8_t>;
+    std::vector<ConnectionRecord> receivedConnections;
+    server.onConnected({});
+    server.onConnectionRequest(
+        [&](const BteBdAddr &address, const BteClassOfDevice &cod,
+            uint8_t link_type) {
+        receivedConnections.push_back({address, cod, link_type});
+        return true;
+    });
+
+    /* Reply to the write scan enable command */
+    m_backend.sendEvent({HCI_COMMAND_COMPLETE, 4, 1, 0x1a, 0xc, 0});
+    bte_handle_events();
+    m_backend.clear();
+
+    /* Send an incoming connection */
+    BteBdAddr address = {1, 2, 3, 4, 5, 6};
+    BteClassOfDevice cod = {7, 8, 9};
+    sendHciConnectionReq(address, cod);
+    bte_handle_events();
+
+    /* Verify that no commands were sent */
+    ASSERT_TRUE(m_backend.sentCommands().empty());
+
+    std::vector<ConnectionRecord> expectedConnections = {
+        {address, cod, 1}
+    };
+    ASSERT_EQ(receivedConnections, expectedConnections);
+}

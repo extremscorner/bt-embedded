@@ -12,6 +12,8 @@ struct bte_l2cap_server_t {
     BteL2capPsm psm;
     BteL2capServerConnectedCb connected_cb;
     void *userdata;
+    BteHciConnectionRequestCb connection_request_cb;
+    void *connection_request_userdata;
     struct bte_l2cap_server_t *next;
 };
 
@@ -22,6 +24,14 @@ static BteL2capServer *server_for_psm(BteL2capPsm psm)
 {
     for (BteL2capServer *s = s_servers; s != NULL; s = s->next) {
         if (s->psm == psm) return s;
+    }
+    return NULL;
+}
+
+static BteL2capServer *server_from_hci(BteHci *hci)
+{
+    for (BteL2capServer *s = s_servers; s != NULL; s = s->next) {
+        if (s->hci == hci) return s;
     }
     return NULL;
 }
@@ -72,6 +82,14 @@ static bool hci_connection_request_cb(BteHci *hci,
                                       BteLinkType link_type,
                                       void *userdata)
 {
+    BteL2capServer *l2cap_server = server_from_hci(hci);
+
+    if (l2cap_server->connection_request_cb) {
+        return l2cap_server->connection_request_cb(
+            hci, address, cod, link_type,
+            l2cap_server->connection_request_userdata);
+    }
+
     if (link_type != BTE_LINK_TYPE_ACL) return false;
 
     /* We accept all requests; if the peer will attempt to request a PSM that
@@ -145,4 +163,12 @@ void bte_l2cap_server_on_connected(
                                   hci_connection_request_cb);
     bte_hci_write_scan_enable(l2cap_server->hci,
                               BTE_HCI_SCAN_ENABLE_PAGE, NULL, NULL);
+}
+
+void bte_l2cap_server_on_connection_request(
+    BteL2capServer *l2cap_server, BteHciConnectionRequestCb callback,
+    void *userdata)
+{
+    l2cap_server->connection_request_cb = callback;
+    l2cap_server->connection_request_userdata = userdata;
 }

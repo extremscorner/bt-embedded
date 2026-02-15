@@ -24,6 +24,17 @@ void bte_l2cap_server_on_connected(
     BteL2capServer *l2cap_server, BteL2capServerConnectedCb connected_cb,
     void *userdata);
 
+/**
+ * Call this function if you want to control which incoming connections
+ * should be accepted. By default, all connections are accepted.
+ *
+ * \param callback The function that will be called when an incoming
+ *        connection is requested.
+ */
+void bte_l2cap_server_on_connection_request(
+    BteL2capServer *l2cap_server, BteHciConnectionRequestCb callback,
+    void *userdata);
+
 #ifdef __cplusplus
 }
 #endif
