@@ -783,7 +783,9 @@ static void auth_complete_event_cb(BteBuffer *buffer)
     void *userdata = pc->userdata;
     _bte_hci_dev_free_command(pc);
 
-    auth_requested_cb(hci, &reply, userdata);
+    if (auth_requested_cb) {
+        auth_requested_cb(hci, &reply, userdata);
+    }
 }
 
 void bte_hci_auth_requested(BteHci *hci,
