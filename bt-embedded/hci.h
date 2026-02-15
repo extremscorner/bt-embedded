@@ -151,7 +151,17 @@ void bte_hci_reject_connection(BteHci *hci,
                                BteHciRejectConnectionCb callback,
                                void *userdata);
 
-/* Return true if this client will handle the event */
+/**
+ * Callback for incoming connections.
+ *
+ * This function is called when an incoming connection is received. If the
+ * client does not care about this connection, it should return \a false,
+ * to let any other subscribed client to handle it instead. If the client
+ * returns \a true, it is expected that it calls
+ * bte_hci_accept_connection() or bte_hci_reject_connection(), and no other
+ * clients will receive this callback. If all clients return \a false, the
+ * connection request will time out.
+ */
 typedef bool (*BteHciConnectionRequestCb)(BteHci *hci,
                                           const BteBdAddr *address,
                                           const BteClassOfDevice *cod,
