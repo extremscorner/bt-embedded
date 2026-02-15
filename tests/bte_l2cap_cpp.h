@@ -472,7 +472,8 @@ public:
             m_server, &L2capServer::Callbacks::onConnected, this);
     }
 
-    using ConnectionRequestCb = Client::Hci::ConnectionRequestCb;
+    using ConnectionRequestCb =
+        std::function<bool(const BteBdAddr &, const BteClassOfDevice &cod)>;
     void onConnectionRequest(const ConnectionRequestCb &cb)
     {
         m_onConnectionRequest = cb;
@@ -491,10 +492,10 @@ private:
                 _this->m_onConnected(l2cap_cpp);
         }
         static bool onConnectionRequest(
-            BteHci *hci, const BteBdAddr *address, const BteClassOfDevice *cod,
-            uint8_t link_type, void *d) {
+            BteL2capServer *l2cap_server, const BteBdAddr *address,
+            const BteClassOfDevice *cod, void *d) {
             L2capServer *_this = static_cast<L2capServer*>(d);
-            return _this->m_onConnectionRequest(*address, *cod, link_type);
+            return _this->m_onConnectionRequest(*address, *cod);
         }
     };
     BteL2capServer *m_server;

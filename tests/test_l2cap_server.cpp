@@ -357,13 +357,12 @@ TEST_F(TestL2capServer, testManyOk)
 TEST_F(TestL2capServer, testAcceptCallback)
 {
     Bte::L2capServer server(*m_client, BTE_L2CAP_PSM_SDP);
-    using ConnectionRecord = std::tuple<BteBdAddr, BteClassOfDevice, uint8_t>;
+    using ConnectionRecord = std::tuple<BteBdAddr, BteClassOfDevice>;
     std::vector<ConnectionRecord> receivedConnections;
     server.onConnected({});
     server.onConnectionRequest(
-        [&](const BteBdAddr &address, const BteClassOfDevice &cod,
-            uint8_t link_type) {
-        receivedConnections.push_back({address, cod, link_type});
+        [&](const BteBdAddr &address, const BteClassOfDevice &cod) {
+        receivedConnections.push_back({address, cod});
         return true;
     });
 
@@ -378,11 +377,15 @@ TEST_F(TestL2capServer, testAcceptCallback)
     sendHciConnectionReq(address, cod);
     bte_handle_events();
 
-    /* Verify that no commands were sent */
-    ASSERT_TRUE(m_backend.sentCommands().empty());
+    /* Verify that the connection was accepted sent */
+    uint8_t role = BTE_HCI_ROLE_SLAVE;
+    std::vector<Buffer> expectedCommands{
+        Buffer{ 0x9, 0x4, 6 + 1 } + address + Buffer{role},
+    };
+    ASSERT_EQ(m_backend.sentCommands(), expectedCommands);
 
     std::vector<ConnectionRecord> expectedConnections = {
-        {address, cod, 1}
+        {address, cod}
     };
     ASSERT_EQ(receivedConnections, expectedConnections);
 }
