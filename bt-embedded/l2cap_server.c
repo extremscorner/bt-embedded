@@ -10,6 +10,8 @@ struct bte_l2cap_server_t {
     atomic_int ref_count;
     BteHci *hci;
     BteL2capPsm psm;
+    uint8_t role;
+    bool needs_auth;
     BteL2capServerConnectedCb connected_cb;
     void *userdata;
     BteL2capServerConnectionRequestCb connection_request_cb;
@@ -62,8 +64,13 @@ static void hci_accept_connection_cb(BteHci *hci,
                                      const BteHciAcceptConnectionReply *reply,
                                      void *userdata)
 {
+    BteL2capServer *l2cap_server = userdata;
+
     if (reply->status != 0) return;
 
+    if (l2cap_server->needs_auth) {
+        bte_hci_auth_requested(hci, reply->conn_handle, NULL, NULL, NULL);
+    }
     _bte_l2cap_acl_new_connected(hci, reply);
     /* TODO: do we need to store this object? */
 }
@@ -92,10 +99,11 @@ static bool hci_connection_request_cb(BteHci *hci,
     if (!l2cap_server) return false;
 
 
-    /* We accept all requests; if the peer will attempt to request a PSM that
-     * we don't support, the connection will get closed at that point. */
-    bte_hci_accept_connection(hci, address, BTE_HCI_ROLE_SLAVE, NULL,
-                              hci_accept_connection_cb, NULL);
+    /* By default we accept all requests; if the peer will attempt to request a
+     * PSM that we don't support, the connection will get closed at that point.
+     */
+    bte_hci_accept_connection(hci, address, l2cap_server->role, NULL,
+                              hci_accept_connection_cb, l2cap_server);
     return true;
 }
 
@@ -124,6 +132,7 @@ BteL2capServer *bte_l2cap_server_new(BteClient *client, BteL2capPsm psm)
     l2cap_server->ref_count = 1;
     l2cap_server->hci = bte_hci_get(bte_client_ref(client));
     l2cap_server->psm = psm;
+    l2cap_server->role = BTE_HCI_ROLE_SLAVE;
     l2cap_server->next = s_servers;
     s_servers = l2cap_server;
     return l2cap_server;
@@ -150,6 +159,17 @@ BteClient *bte_l2cap_server_get_client(BteL2capServer *l2cap_server)
 BteHci *bte_l2cap_server_get_hci(BteL2capServer *l2cap_server)
 {
     return l2cap_server->hci;
+}
+
+void bte_l2cap_server_set_needs_auth(BteL2capServer *l2cap_server,
+                                     bool needs_auth)
+{
+    l2cap_server->needs_auth = needs_auth;
+}
+
+void bte_l2cap_server_set_role(BteL2capServer *l2cap_server, uint8_t role)
+{
+    l2cap_server->role = role;
 }
 
 void bte_l2cap_server_on_connected(

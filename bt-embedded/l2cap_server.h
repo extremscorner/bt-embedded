@@ -17,6 +17,10 @@ void bte_l2cap_server_unref(BteL2capServer *l2cap_server);
 BteClient *bte_l2cap_server_get_client(BteL2capServer *l2cap_server);
 BteHci *bte_l2cap_server_get_hci(BteL2capServer *l2cap_server);
 
+void bte_l2cap_server_set_needs_auth(BteL2capServer *l2cap_server,
+                                     bool needs_auth);
+void bte_l2cap_server_set_role(BteL2capServer *l2cap_server, uint8_t role);
+
 typedef void (*BteL2capServerConnectedCb)(
     BteL2capServer *l2cap_server, BteL2cap *l2cap, void *userdata);
 
