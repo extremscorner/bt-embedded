@@ -12,7 +12,7 @@ struct bte_l2cap_server_t {
     BteL2capPsm psm;
     BteL2capServerConnectedCb connected_cb;
     void *userdata;
-    BteHciConnectionRequestCb connection_request_cb;
+    BteL2capServerConnectionRequestCb connection_request_cb;
     void *connection_request_userdata;
     struct bte_l2cap_server_t *next;
 };
@@ -24,14 +24,6 @@ static BteL2capServer *server_for_psm(BteL2capPsm psm)
 {
     for (BteL2capServer *s = s_servers; s != NULL; s = s->next) {
         if (s->psm == psm) return s;
-    }
-    return NULL;
-}
-
-static BteL2capServer *server_from_hci(BteHci *hci)
-{
-    for (BteL2capServer *s = s_servers; s != NULL; s = s->next) {
-        if (s->hci == hci) return s;
     }
     return NULL;
 }
@@ -82,15 +74,23 @@ static bool hci_connection_request_cb(BteHci *hci,
                                       BteLinkType link_type,
                                       void *userdata)
 {
-    BteL2capServer *l2cap_server = server_from_hci(hci);
+    if (link_type != BTE_LINK_TYPE_ACL) return false;
 
-    if (l2cap_server->connection_request_cb) {
-        return l2cap_server->connection_request_cb(
-            hci, address, cod, link_type,
-            l2cap_server->connection_request_userdata);
+    BteL2capServer *l2cap_server = NULL;
+    for (BteL2capServer *s = s_servers; s != NULL; s = s->next) {
+        if (s->hci != hci) continue;
+
+        if (!s->connection_request_cb ||
+            s->connection_request_cb(s, address, cod,
+                                     s->connection_request_userdata)) {
+            /* This BteL2capServer accepted the connection */
+            l2cap_server = s;
+            break;
+        }
     }
 
-    if (link_type != BTE_LINK_TYPE_ACL) return false;
+    if (!l2cap_server) return false;
+
 
     /* We accept all requests; if the peer will attempt to request a PSM that
      * we don't support, the connection will get closed at that point. */
@@ -166,7 +166,7 @@ void bte_l2cap_server_on_connected(
 }
 
 void bte_l2cap_server_on_connection_request(
-    BteL2capServer *l2cap_server, BteHciConnectionRequestCb callback,
+    BteL2capServer *l2cap_server, BteL2capServerConnectionRequestCb callback,
     void *userdata)
 {
     l2cap_server->connection_request_cb = callback;

@@ -25,6 +25,13 @@ void bte_l2cap_server_on_connected(
     void *userdata);
 
 /**
+ * Return true if the connection should be accepted, false otherwise.
+ */
+typedef bool (*BteL2capServerConnectionRequestCb)(
+    BteL2capServer *l2cap_server, const BteBdAddr *address,
+    const BteClassOfDevice *cod, void *userdata);
+
+/**
  * Call this function if you want to control which incoming connections
  * should be accepted. By default, all connections are accepted.
  *
@@ -32,7 +39,7 @@ void bte_l2cap_server_on_connected(
  *        connection is requested.
  */
 void bte_l2cap_server_on_connection_request(
-    BteL2capServer *l2cap_server, BteHciConnectionRequestCb callback,
+    BteL2capServer *l2cap_server, BteL2capServerConnectionRequestCb callback,
     void *userdata);
 
 #ifdef __cplusplus
