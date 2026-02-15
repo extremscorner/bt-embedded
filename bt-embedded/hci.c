@@ -26,10 +26,22 @@ static void write_clock_offset(uint16_t clock_offset, uint8_t *data)
 static void common_read_connection_status_cb(BteHci *hci, uint8_t status,
                                              BteHciPendingCommand *pc)
 {
-    if (status != 0) goto error;
-
     struct _bte_hci_tmpdata_common_read_connection_t *tmpdata =
         &hci->last_async_cmd_data.common_read_connection;
+    if (status != 0) {
+        if (!pc->command_cb.cmd_status.client_cb && tmpdata->client_cb) {
+            /* Just an arbitrary size to give some slack to the client, in case
+             * it tries to read more fields from the reply despite the error
+             * status. It would be a mistake of the client, but let's try to be
+             * as nice as possible. */
+            uint8_t reply[16] = {0, };
+            reply[0] = status;
+            void (*status_cb)(BteHci *, const uint8_t*, void*) = tmpdata->client_cb;
+            status_cb(hci, reply, pc->userdata);
+        }
+        goto error;
+    }
+
     BteDataMatcher matcher;
     bte_data_matcher_init(&matcher);
     bte_data_matcher_add_rule(&matcher, &tmpdata->event_code, 1, 0);
