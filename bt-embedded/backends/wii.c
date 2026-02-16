@@ -6,8 +6,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <ogc/machine/processor.h>
-#include <ogc/mutex.h>
-#include <ogc/cond.h>
+#include <ogc/semaphore.h>
 #include <ogc/system.h>
 #include <ogc/usb.h>
 #include <stdio.h>
@@ -60,8 +59,8 @@ static WiiBufferData *s_wii_buffer_data;
 static WiiEventQueue s_wii_event_queue;
 
 static int s_bt_fd = -1;
-static cond_t s_event_cond = LWP_COND_NULL;
-static mutex_t s_event_mutex = LWP_MUTEX_NULL;
+static sem_t s_event_sem = LWP_SEM_NULL;
+static syswd_t s_event_timer = SYS_WD_NULL;
 
 static int read_intr();
 static int read_bulk();
@@ -123,7 +122,7 @@ static inline void queue_event(WiiEventType type, BteBuffer *buffer)
     WiiEvent *e = &s_wii_event_queue.events[s_wii_event_queue.current_index++];
     e->type = type;
     e->buffer = buffer;
-    LWP_CondSignal(s_event_cond);
+    LWP_SemPost(s_event_sem);
 }
 
 static s32 read_intr_cb(s32 result, void *userdata)
@@ -194,8 +193,8 @@ static int wii_init()
     BTE_DEBUG("USB_OpenDevice returned %d\n", rc);
     if (rc != USB_OK) return -1;
 
-    LWP_CondInit(&s_event_cond);
-    LWP_MutexInit(&s_event_mutex, false);
+    LWP_SemInit(&s_event_sem, 0, WII_MAX_EVENTS);
+    SYS_CreateAlarm(&s_event_timer);
 
     s_wii_buffer_intr =
         alloc_usb_buffers(sizeof(WiiBufferIntr) * WII_BUFFER_INTR_COUNT);
@@ -210,39 +209,59 @@ static int wii_init()
     return 0;
 }
 
+static void event_timer_cb(syswd_t alarm, void *cb_arg)
+{
+    bool *alarm_fired = cb_arg;
+    *alarm_fired = true;
+    LWP_SemPost(s_event_sem);
+}
+
 static int wii_handle_events(bool wait_for_events, uint32_t timeout_ms)
 {
     WiiEventQueue queue;
     u32 level;
 
-    LWP_MutexLock(s_event_mutex);
+    uint32_t num_events = 0;
+    LWP_SemGetValue(s_event_sem, &num_events);
+
+    for (int i = 0; i < num_events; i++) {
+        LWP_SemWait(s_event_sem);
+    }
+    if (num_events == 0 && wait_for_events) {
+        struct timespec ts;
+        ts.tv_sec = timeout_ms / 1000000;
+        ts.tv_nsec = (timeout_ms % 1000000) * 1000;
+        bool alarm_fired = false;
+        SYS_SetAlarm(s_event_timer, &ts, event_timer_cb, &alarm_fired);
+        /* We disable interrupts because we don't want our timeout alarm to
+         * trigger (and therefore increment the semaphore) between the time
+         * that LWP_SemWait returns and the time we cancel it. */
+        _CPU_ISR_Disable(level);
+        LWP_SemWait(s_event_sem);
+        if (alarm_fired) {
+            _CPU_ISR_Restore(level);
+            return 0;
+        } else {
+            SYS_CancelAlarm(s_event_timer);
+            num_events = 1;
+        }
+        _CPU_ISR_Restore(level);
+    }
+
     _CPU_ISR_Disable(level);
     /* Create a copy of the queue to ensure it doesn't get modified while we
      * process it */
     memcpy(&queue, &s_wii_event_queue, sizeof(queue));
-    s_wii_event_queue.current_index = 0; /* empty the queue */
+    queue.current_index = num_events;
+    int unprocessed = s_wii_event_queue.current_index - num_events;
+    if (unprocessed > 0) {
+        memmove(&s_wii_event_queue.events[0],
+                &s_wii_event_queue.events[num_events],
+                sizeof(s_wii_event_queue.events[0]) * unprocessed);
+    }
+    s_wii_event_queue.current_index = unprocessed;
     s_wii_event_queue.missed_events = 0;
     _CPU_ISR_Restore(level);
-    if (wait_for_events && queue.current_index == 0) {
-        /* Note that here there is a small risk of a deadlock: if an event is
-         * received right at this point, the interrupt handler will run and
-         * call LWP_CondSignal() before we have called LWP_CondWait()
-         * ourselves, and therefore LWP_Condwait() will wait until the next
-         * event happens (which could be never).
-         *
-         * Or maybe the wait condition is stored and can be retrieved later?
-         */
-        struct timespec ts;
-        ts.tv_sec = timeout_ms / 1000000;
-        ts.tv_nsec = (timeout_ms % 1000000) * 1000;
-        LWP_CondTimedWait(s_event_cond, s_event_mutex, &ts);
-        _CPU_ISR_Disable(level);
-        memcpy(&queue, &s_wii_event_queue, sizeof(queue));
-        s_wii_event_queue.current_index = 0; /* empty the queue */
-        s_wii_event_queue.missed_events = 0;
-        _CPU_ISR_Restore(level);
-    }
-    LWP_MutexUnlock(s_event_mutex);
 
     if (UNLIKELY(queue.missed_events > 0)) {
         BTE_WARN("%d events were not reported!", queue.missed_events);
