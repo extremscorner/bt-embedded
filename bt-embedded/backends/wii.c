@@ -57,6 +57,8 @@ typedef struct {
 static WiiBufferIntr *s_wii_buffer_intr;
 static WiiBufferData *s_wii_buffer_data;
 static WiiEventQueue s_wii_event_queue;
+static bool s_intr_request_failed = false;
+static bool s_bulk_request_failed = false;
 
 static int s_bt_fd = -1;
 static sem_t s_event_sem = LWP_SEM_NULL;
@@ -67,8 +69,17 @@ static int read_bulk();
 
 static void wii_buffer_free(BteBuffer *buffer)
 {
-    /* This should already be the case, but just to be safe */
-    buffer->ref_count = 0;
+    /* If the CPU is slow in processing events, we might run short of buffers;
+     * in that case, we set the s_intr_request_failed and s_bulk_request_failed
+     * flags. Here we have just released one buffer, so we can restart the
+     * reading chains. */
+    if (UNLIKELY(s_intr_request_failed)) {
+        s_intr_request_failed = false;
+        read_intr();
+    } else if (UNLIKELY(s_bulk_request_failed)) {
+        s_bulk_request_failed = false;
+        read_bulk();
+    }
 }
 
 static void *alloc_usb_buffers(int size)
@@ -144,7 +155,10 @@ static s32 read_intr()
 
     u16 len = CTRL_BUF_SIZE;
     BteBuffer *buf = wii_buffer_intr_alloc(len);
-    if (!buf) return -ENOMEM;
+    if (!buf) {
+        s_intr_request_failed = true;
+        return -ENOMEM;
+    }
 
     u8 *ptr = bte_buffer_contiguous_data(buf, len);
     s32 rc = USB_ReadIntrMsgAsync(s_bt_fd, ENDPOINT_HCI_INTR, len, ptr,
@@ -172,7 +186,10 @@ static s32 read_bulk()
 
     u16 len = ACL_BUF_SIZE;
     BteBuffer *buf = wii_buffer_data_alloc(len);
-    if (!buf) return -ENOMEM;
+    if (!buf) {
+        s_bulk_request_failed = true;
+        return -ENOMEM;
+    }
 
     u8 *ptr = bte_buffer_contiguous_data(buf, len);
     s32 ret = USB_ReadBlkMsgAsync(s_bt_fd, ENDPOINT_ACL_IN, len, ptr,
