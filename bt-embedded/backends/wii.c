@@ -20,12 +20,15 @@
 #define ENDPOINT_ACL_IN   0x82
 #define ENDPOINT_ACL_OUT  0x02
 
-#define CTRL_BUF_SIZE 660 /* From libogc */
-#define ACL_BUF_SIZE  1800
+/* The max size of an HCI event is 255 (payload) + 3 (header); here we round it
+ * up a bit */
+#define CTRL_BUF_SIZE 264
+/* Typical MTU is 339; we round it up */
+#define ACL_BUF_SIZE  352
 
 #define WII_MAX_EVENTS        128
-#define WII_BUFFER_INTR_COUNT 64
-#define WII_BUFFER_DATA_COUNT 8
+#define WII_BUFFER_INTR_COUNT 16
+#define WII_BUFFER_DATA_COUNT 64
 
 typedef enum {
     WII_EVENT_SENT,
