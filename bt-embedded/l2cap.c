@@ -63,7 +63,7 @@ static void l2cap_set_state(BteL2cap *l2cap, BteL2capState state)
 {
     if (state == l2cap->state) return;
 
-    BTE_DEBUG("%s:%d state is now %d\n", __func__, __LINE__, state);
+    BTE_DEBUG("state is now %d", state);
     l2cap->state = state;
     if (l2cap->state_changed_cb)
         l2cap->state_changed_cb(l2cap, state, l2cap->userdata);

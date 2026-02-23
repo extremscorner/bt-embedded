@@ -44,14 +44,14 @@ static const uint8_t wii_patch_1[92] = {
 
 static void initialization_done(BteClient *client)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     bte_client_unref(client);
     _bte_hci_dev_set_status(BTE_HCI_INIT_STATUS_INITIALIZED);
 }
 
 static void on_reset_patched_done(BteHci *hci, const BteHciReply *reply, void *)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     STOP_ON_FAILURE(hci, reply);
 
     /* TODO libogc here would call:
@@ -79,14 +79,14 @@ static void on_reset_patched_done(BteHci *hci, const BteHciReply *reply, void *)
 
 static void on_patch_end_done(BteHci *hci, BteBuffer *reply, void *userdata)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
 
     bte_hci_reset(hci, on_reset_patched_done, userdata);
 }
 
 static void on_patch_cont_done(BteHci *hci, BteBuffer *reply, void *userdata)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
 
     bte_hci_vendor_command(hci, HCI_VENDOR_PATCH_END_OCF,
                            wii_patch_1, sizeof(wii_patch_1),
@@ -95,7 +95,7 @@ static void on_patch_cont_done(BteHci *hci, BteBuffer *reply, void *userdata)
 
 static void on_patch_start_done(BteHci *hci, BteBuffer *reply, void *userdata)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
 
     bte_hci_vendor_command(hci, HCI_VENDOR_PATCH_CONT_OCF,
                            wii_patch_0, sizeof(wii_patch_0),
@@ -106,7 +106,7 @@ static void on_read_local_features(BteHci *hci,
                                    const BteHciReadLocalFeaturesReply *reply,
                                    void *userdata)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     STOP_ON_FAILURE(hci, reply);
 
     /* TODO libogc here would call:
@@ -133,7 +133,7 @@ static void on_bd_addr_done(BteHci *hci, const BteHciReadBdAddrReply *reply,
 {
     BteHciDev *dev = userdata;
 
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     STOP_ON_FAILURE(hci, reply);
 
     dev->address = reply->address;
@@ -143,7 +143,7 @@ static void on_bd_addr_done(BteHci *hci, const BteHciReadBdAddrReply *reply,
 static void on_read_local_version_done(
     BteHci *hci, const BteHciReadLocalVersionReply *reply, void *userdata)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     STOP_ON_FAILURE(hci, reply);
 
     bte_hci_read_bd_addr(hci, on_bd_addr_done, userdata);
@@ -155,7 +155,7 @@ static void on_buffer_size_done(BteHci *hci,
 {
     BteHciDev *dev = userdata;
 
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     STOP_ON_FAILURE(hci, reply);
 
     dev->acl_mtu = reply->acl_mtu;
@@ -176,7 +176,7 @@ static void on_buffer_size_done(BteHci *hci,
 static void on_reset_done(BteHci *hci, const BteHciReply *reply,
                           void *userdata)
 {
-    BTE_DEBUG("%s\n", __func__);
+    BTE_DEBUG("");
     STOP_ON_FAILURE(hci, reply);
 
     bte_hci_read_buffer_size(hci, on_buffer_size_done, userdata);

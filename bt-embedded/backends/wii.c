@@ -203,14 +203,14 @@ static s32 read_bulk()
 static int wii_init()
 {
     int rc = USB_Initialize();
-    BTE_DEBUG("USB_Initialize returned %d\n", rc);
+    BTE_DEBUG("USB_Initialize returned %d", rc);
     if (rc != USB_OK) return -1;
 
     rc = USB_OpenDevice(USB_OH1_DEVICE_ID,
                         USB_VENDOR_NINTENDO,
                         USB_PRODUCT_WII_BT,
                         &s_bt_fd);
-    BTE_DEBUG("USB_OpenDevice returned %d\n", rc);
+    BTE_DEBUG("USB_OpenDevice returned %d", rc);
     if (rc != USB_OK) return -1;
 
     LWP_SemInit(&s_event_sem, 0, WII_MAX_EVENTS);
@@ -310,7 +310,7 @@ static s32 hci_send_command_cb(s32 result, void *userdata)
 
 static int wii_hci_send_command(BteBuffer *buf)
 {
-    BTE_DEBUG("%s fd = %d, buf %p, data %p, size=%d\n", __func__, s_bt_fd, buf,
+    BTE_DEBUG("fd = %d, buf %p, data %p, size=%d", s_bt_fd, buf,
               buf->data, buf->size);
     if (UNLIKELY(s_bt_fd < 0)) return -EBADF;
 

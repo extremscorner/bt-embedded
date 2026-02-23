@@ -1,6 +1,8 @@
 #ifndef BTE_LOGGING_H
 #define BTE_LOGGING_H
 
+#include "platform_defs.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 
@@ -10,12 +12,12 @@ extern "C" {
 
 #define DEBUG 1
 
-#define BTE_WARN(...) printf(__VA_ARGS__)
-#define BTE_INFO(...) printf(__VA_ARGS__)
+#define BTE_WARN(fmt, ...) BTE_LOG("[E] " fmt "\n", ##__VA_ARGS__)
+#define BTE_INFO(fmt, ...) BTE_LOG("[I] " fmt "\n", ##__VA_ARGS__)
 #if DEBUG
-#define BTE_DEBUG(...) printf(__VA_ARGS__)
+#define BTE_DEBUG(fmt, ...) BTE_LOG("[D] %s:%d: " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
 #else
-#define BTE_DEBUG(...) (void)0
+#define BTE_DEBUG(fmt, ...) (void)0
 #endif
 
 #ifdef __cplusplus

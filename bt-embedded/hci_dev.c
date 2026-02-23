@@ -206,16 +206,21 @@ void _bte_hci_dev_set_buffer_size(uint16_t acl_mtu, uint16_t acl_max_packets,
 
 int _bte_hci_dev_handle_event(BteBuffer *buf)
 {
+#if DEBUG
     {
         int len = buf->size;
-        if (len > 16) len = 16;
+        if (len > 22) len = 22;
 
-        BTE_DEBUG("Event, size %d:", buf->size);
+        char buffer[80];
+        int offset = 0;
+
+
         for (int i = 0; i < len; i++) {
-            BTE_DEBUG(" %02x", buf->data[i]);
+            offset += sprintf(buffer + offset, " %02x", buf->data[i]);
         }
-        BTE_DEBUG("\n");
+        BTE_DEBUG("Event, size %d:%s", buf->size, buffer);
     }
+#endif
 
     uint8_t code = buf->data[0];
     uint8_t len = buf->data[1];
@@ -229,7 +234,7 @@ int _bte_hci_dev_handle_event(BteBuffer *buf)
         uint16_t opcode_h = le16toh(opcode);
         uint16_t ocf = opcode_h & 0x03ff;
         uint8_t ogf = opcode_h >> 10;
-        BTE_DEBUG("opcode %04x, ogf %02x, ocf %04x\n", opcode, ogf, ocf);
+        BTE_DEBUG("opcode %04x, ogf %02x, ocf %04x", opcode, ogf, ocf);
         switch (ogf) {
         case HCI_INFO_PARAM_OGF:
             handle_info_param(ocf, data + 3, len - 3);
@@ -259,14 +264,21 @@ int _bte_hci_dev_handle_data(BteBuffer *buf)
 {
     BteHciDev *dev = &_bte_hci_dev;
 
-    int len = buf->size;
-    if (len > 10) len = 10;
+#if DEBUG
+    {
+        int len = buf->size;
+        if (len > 22) len = 22;
 
-    BTE_DEBUG("Data, size %d:", buf->size);
-    for (int i = 0; i < len; i++) {
-        BTE_DEBUG(" %02x", buf->data[i]);
+        char buffer[80];
+        int offset = 0;
+
+
+        for (int i = 0; i < len; i++) {
+            offset += sprintf(buffer + offset, " %02x", buf->data[i]);
+        }
+        BTE_DEBUG("Data, size %d:%s", buf->size, buffer);
     }
-    BTE_DEBUG("\n");
+#endif
 
     if (dev->data_handler_cb) dev->data_handler_cb(buf);
 
@@ -322,7 +334,7 @@ void _bte_hci_dev_set_status(BteHciInitStatus status)
     BteHciDev *dev = &_bte_hci_dev;
     dev->init_status = status;
 
-    BTE_DEBUG("%s, status %d\n", __func__, status);
+    BTE_DEBUG("status %d", status);
     if (status == BTE_HCI_INIT_STATUS_INITIALIZED ||
         status == BTE_HCI_INIT_STATUS_FAILED) {
         bool success = status == BTE_HCI_INIT_STATUS_INITIALIZED;
