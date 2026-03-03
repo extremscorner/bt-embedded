@@ -1764,6 +1764,7 @@ static void new_configured_state_changed_cb(
 
     if (state == BTE_L2CAP_OPEN) {
         bte_l2cap_set_userdata(l2cap, NULL);
+        bte_l2cap_on_state_changed(l2cap, NULL);
         BteL2capNewConfiguredReply r = { BTE_L2CAP_CONN_RESP_RES_OK };
         cd->callback(l2cap, &r, cd->userdata);
         cd->reply_sent = true;
