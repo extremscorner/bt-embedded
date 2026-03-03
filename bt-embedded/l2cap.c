@@ -1448,7 +1448,7 @@ void bte_l2cap_new_outgoing(BteClient *client, const BteBdAddr *address,
     } else {
         acl = bte_acl_new(hci, address, sizeof(BteAclL2cap));
         l2cap_setup_acl(acl);
-        l2cap->acl = bte_acl_ref(acl);
+        l2cap->acl = acl;
         if (!params) params = default_connect_params(hci);
         BteAclConnectFlags acl_flags = 0;
         if (flags & BTE_L2CAP_CONNECT_FLAG_AUTH) {
