@@ -160,12 +160,20 @@ static void disconnect(obex_t *handle)
 }
 #endif
 
+static void disconnected_cb(BteL2cap *l2cap, uint8_t reason, void *)
+{
+    printf("Disconnected (reason %d), quitting...\n", reason);
+    bte_l2cap_unref(l2cap);
+    quit_requested = true;
+}
+
 static void new_configured_cb(
     BteL2cap *l2cap, const BteL2capNewConfiguredReply *reply, void *userdata)
 {
     printf("L2CAP configured, result %d, l2cap valid %d\n", reply->result, l2cap != NULL);
     if (reply->result != 0) return;
 
+    bte_l2cap_on_disconnected(l2cap, disconnected_cb, NULL);
 #ifdef WITH_OPENOBEX
     obex_t *handle = OBEX_Init(OBEX_TRANS_CUSTOM, obex_event_cb, 0);
     OBEX_RegisterCTransport(handle, bte_openobex_transport());
