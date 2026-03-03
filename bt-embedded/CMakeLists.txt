@@ -8,6 +8,14 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "NintendoWii")
     set(DRIVERS_SOURCES
         drivers/wii.c
     )
+elseif(LibUSB_FOUND)
+    list(APPEND EXTRA_LIBS PkgConfig::LibUSB)
+    set(PLATFORM_SOURCES
+        backends/libusb.c
+    )
+    set(DRIVERS_SOURCES
+        drivers/generic.c
+    )
 else()
     message(WARNING "No available platform backend")
 endif()

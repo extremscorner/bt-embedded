@@ -29,6 +29,7 @@ add_compile_options(
 )
 
 find_package(PkgConfig)
+pkg_check_modules(LibUSB libusb-1.0 IMPORTED_TARGET)
 if(WITH_OPENOBEX)
     pkg_check_modules(OpenObex openobex IMPORTED_TARGET)
 endif(WITH_OPENOBEX)
