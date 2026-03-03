@@ -307,6 +307,10 @@ int main(int argc, char **argv)
                 print_addr(&s_peerAddress);
             } else if (n == 1) {
                 strncpy(filename, line, sizeof(filename));
+                int len = strlen(filename);
+                if (filename[len - 1] == '\n') {
+                    filename[len - 1] = '\0';
+                }
             }
             n++;
         }
