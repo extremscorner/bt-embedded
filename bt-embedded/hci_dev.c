@@ -321,11 +321,17 @@ void _bte_hci_dev_remove_client(BteClient *client)
 
     hci_dev_dispose(dev, &client->hci);
 
+    int active_clients = 0;
     for (int i = 0; i < BTE_HCI_MAX_CLIENTS; i++) {
         if (dev->clients[i] == client) {
             dev->clients[i] = NULL;
-            break;
+        } else if (dev->clients[i]) {
+            active_clients++;
         }
+    }
+
+    if (active_clients == 0) {
+        _bte_backend.deinit();
     }
 }
 
