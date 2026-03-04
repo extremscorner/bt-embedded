@@ -134,11 +134,16 @@ static void bte_acl_disconnected(BteAcl *acl, uint8_t reason)
     }
 
     acl->conn_handle = BTE_CONN_HANDLE_INVALID;
+    /* The callback below might destroy the ACL, so let's save this information
+     * now */
+    bool is_incoming = acl->is_incoming;
     if (acl->disconnected_cb) {
+        bte_acl_ref(acl); /* temporary reference */
         /* Make sure we don't invoke this twice for the same ACL */
         void (*disconnected_cb)(BteAcl *acl, uint8_t reason) = acl->disconnected_cb;
         acl->disconnected_cb = NULL;
         disconnected_cb(acl, reason);
+        bte_acl_unref(acl); /* temporary reference */
     }
 
     /* Remove the pointer to this ACL from the BteHciDev */
@@ -147,6 +152,10 @@ static void bte_acl_disconnected(BteAcl *acl, uint8_t reason)
             dev->acls[i] = NULL;
             break;
         }
+    }
+
+    if (is_incoming) {
+        bte_acl_unref(acl);
     }
 }
 
@@ -209,6 +218,7 @@ BteAcl *bte_acl_new_connected(
     acl->hci = hci;
     acl->address = reply->address;
     acl->conn_handle = reply->conn_handle;
+    acl->is_incoming = true;
     if (UNLIKELY(!bte_acl_make_public(acl))) {
         bte_acl_free(acl);
         return NULL;
@@ -255,7 +265,6 @@ static void connect_status_cb(BteHci *hci, const BteHciReply *reply,
     if (reply->status != 0) {
         /* The operation failed. Notify the client */
         acl->connected_cb(acl, reply->status);
-        bte_acl_unref(acl);
     }
 }
 
@@ -264,9 +273,6 @@ static void auth_requested_cb(
 {
     BteAcl *acl = userdata;
     acl->connected_cb(acl, reply->status);
-    if (reply->status != 0) {
-        bte_acl_unref(acl);
-    }
 }
 
 static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
@@ -283,9 +289,6 @@ static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
         }
     }
     acl->connected_cb(acl, reply->status);
-    if (reply->status != 0) {
-        bte_acl_unref(acl);
-    }
 }
 
 void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params,

@@ -225,12 +225,14 @@ static void acl_l2cap_connected_cb(BteL2cap *l2cap, uint8_t status)
 
 static void acl_connected_cb(BteAcl *acl, uint8_t status)
 {
+    bte_acl_ref(acl);
     for (int i = 0; i < BTE_ACL_MAX_CLIENTS; i++) {
         BteL2cap *client = L(acl)->clients[i];
         if (client) {
             acl_l2cap_connected_cb(client, status);
         }
     }
+    bte_acl_unref(acl);
 }
 
 static void l2cap_reject_command_invalid_cid(
@@ -899,6 +901,7 @@ static bool acl_l2cap_handle_connection_req(
     BteL2capPsm psm = le16toh(header[0]);
     BteL2capChannelId channel_id = le16toh(header[1]);
 
+    bte_acl_ref(&acl_l2cap->acl); /* temporary reference */
     BteL2cap *l2cap = _bte_l2cap_handle_connection_req ?
         _bte_l2cap_handle_connection_req(&acl_l2cap->acl, psm, channel_id) :
         NULL;
@@ -906,12 +909,12 @@ static bool acl_l2cap_handle_connection_req(
     if (UNLIKELY(!l2cap)) {
         l2cap_connection_req_reply(acl_l2cap, id, BTE_L2CAP_CHANNEL_ID_NULL,
                                    channel_id, BTE_L2CAP_CONN_RESP_RES_ERR_PSM);
-        return true;
+    } else {
+        l2cap_connection_req_reply(acl_l2cap, id, l2cap->local_channel_id,
+                                   channel_id, BTE_L2CAP_CONN_RESP_RES_OK);
+        l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG);
     }
-
-    l2cap_connection_req_reply(acl_l2cap, id, l2cap->local_channel_id,
-                               channel_id, BTE_L2CAP_CONN_RESP_RES_OK);
-    l2cap_set_state(l2cap, BTE_L2CAP_WAIT_CONFIG);
+    bte_acl_unref(&acl_l2cap->acl); /* temporary reference */
     return true;
 }
 
@@ -1371,7 +1374,6 @@ static void acl_disconnected_cb(BteAcl *acl, uint8_t reason)
         BteL2cap *l2cap = L(acl)->clients[i];
         if (l2cap) l2cap_disconnect_cb(l2cap, reason);
     }
-    bte_acl_unref(acl);
 }
 
 static bool acl_l2cap_add_client(BteAclL2cap *acl_l2cap, BteL2cap *client)

@@ -71,8 +71,9 @@ static void hci_accept_connection_cb(BteHci *hci,
     if (l2cap_server->needs_auth) {
         bte_hci_auth_requested(hci, reply->conn_handle, NULL, NULL, NULL);
     }
+    /* The BteAcl object that we created here has the "is_incoming" flag set,
+     * so it will unreference itself upon disconnection. */
     _bte_l2cap_acl_new_connected(hci, reply);
-    /* TODO: do we need to store this object? */
 }
 
 static bool hci_connection_request_cb(BteHci *hci,
