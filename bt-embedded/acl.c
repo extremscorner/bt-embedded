@@ -282,7 +282,7 @@ static void connect_cb(BteHci *hci, const BteHciCreateConnectionReply *reply,
     if (reply->status == 0) {
         acl->conn_handle = reply->conn_handle;
         acl->encryption_mode = reply->encryption_mode;
-        if (acl->aunthentication_requested) {
+        if (acl->authentication_requested) {
             bte_hci_auth_requested(acl->hci, acl->conn_handle, NULL,
                                    auth_requested_cb, acl);
             return;
@@ -295,7 +295,7 @@ void bte_acl_connect(BteAcl *acl, const BteHciConnectParams *params,
                      BteAclConnectFlags flags)
 {
     if (flags & BTE_ACL_CONNECT_FLAG_AUTH) {
-        acl->aunthentication_requested = true;
+        acl->authentication_requested = true;
     }
     bte_hci_create_connection(acl->hci, &acl->address, params,
                               connect_status_cb, connect_cb, acl);

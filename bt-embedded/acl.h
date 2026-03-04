@@ -25,7 +25,7 @@ struct bte_acl_t {
     BteConnHandle conn_handle;
     uint8_t encryption_mode;
     bool is_incoming : 1;
-    bool aunthentication_requested : 1;
+    bool authentication_requested : 1;
 
     BteBuffer *fragmented_message;
     uint16_t fragmented_message_size;
