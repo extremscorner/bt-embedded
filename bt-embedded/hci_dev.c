@@ -378,6 +378,7 @@ BteHciPendingCommand *_bte_hci_dev_alloc_command(const BteDataMatcher *matcher)
                  * checks on the buffer data in the reply handler, we won't be
                  * able to match the reply with the pending command, therefore
                  * we refuse it. */
+                BTE_DEBUG("Command already in queue!");
                 return NULL;
             }
         }
@@ -457,6 +458,7 @@ void _bte_hci_dev_free_command(BteHciPendingCommand *cmd)
     BteHciDev *dev = &_bte_hci_dev;
     bte_data_matcher_init(&cmd->matcher);
     dev->num_pending_commands--;
+    BTE_DEBUG("pending commands %d", dev->num_pending_commands);
 }
 
 BteBuffer *
