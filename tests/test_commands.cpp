@@ -1336,7 +1336,7 @@ TEST(Commands, testWriteStoredLinkKey) {
         replies.push_back(r);
     });
 
-    Buffer expectedCommand{0x11, 0xc, (6 + 16) * 2};
+    Buffer expectedCommand{0x11, 0xc, 1 + (6 + 16) * 2, 2};
     expectedCommand += keys[0].address;
     expectedCommand += keys[1].address;
     expectedCommand += keys[0].key;

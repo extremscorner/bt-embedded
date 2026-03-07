@@ -1284,11 +1284,12 @@ void bte_hci_write_stored_link_key(
     const uint8_t elem_size = sizeof(BteBdAddr) + sizeof(BteLinkKey);
     BteBuffer *b = _bte_hci_dev_add_pending_command(
         hci, HCI_W_STORED_LINK_KEY_OCF, HCI_HC_BB_OGF,
-        HCI_CMD_HDR_LEN + num_keys * elem_size, write_stored_link_key_cb,
+        HCI_CMD_HDR_LEN + 1 + num_keys * elem_size, write_stored_link_key_cb,
         callback, userdata);
     if (UNLIKELY(!b)) return;
 
-    uint8_t *ptr_addr = b->data + HCI_CMD_HDR_LEN;
+    b->data[HCI_CMD_HDR_LEN] = num_keys;
+    uint8_t *ptr_addr = b->data + HCI_CMD_HDR_LEN + 1;
     uint8_t *ptr_key = ptr_addr + num_keys * sizeof(BteBdAddr);
     for (int i = 0; i < num_keys; i++) {
         const BteBdAddr *address = &keys[i].address;
