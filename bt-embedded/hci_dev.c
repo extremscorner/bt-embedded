@@ -209,7 +209,7 @@ int _bte_hci_dev_handle_event(BteBuffer *buf)
 #if DEBUG
     {
         int len = buf->size;
-        if (len > 22) len = 22;
+        if (len > 26) len = 26;
 
         char buffer[80];
         int offset = 0;
