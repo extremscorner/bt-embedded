@@ -101,13 +101,6 @@ static const std::vector<CommandNoReplyRow> s_commandsWithNoReply {
         {0x4, 0x4, 0}
     },
     {
-        "disconnect",
-        [](BteHci *hci, BteHciDoneCb cb, void *u) {
-            bte_hci_disconnect(hci, 0x4321, 5, cb, u);
-        },
-        {0x6, 0x4, 3, 0x21, 0x43, 5}
-    },
-    {
         "create_connection_cancel",
         [](BteHci *hci, BteHciDoneCb cb, void *u) {
             BteBdAddr address = { 1, 2, 3, 4, 5, 6 };
@@ -598,6 +591,30 @@ TEST(Commands, testCreateConnection) {
     ASSERT_EQ(_bte_hci_dev.num_pending_commands, 0);
 
     bte_client_unref(client);
+}
+
+TEST(Commands, testDisconnect) {
+    MockBackend backend;
+    Bte::Client client;
+    auto &hci = client.hci();
+
+    BteConnHandle handle = 0x1234;
+    uint8_t reason = 5;
+    std::vector<BteHciReply> replies;
+    hci.disconnect(handle, reason, [&](const BteHciReply &r) {
+        replies.push_back(r);
+    });
+
+    Buffer expectedCommand{0x6, 0x4, 3, 0x34, 0x12, reason};
+    ASSERT_EQ(backend.lastCommand(), expectedCommand);
+
+    uint8_t status = 0;
+    backend.sendEvent({HCI_COMMAND_STATUS, 4, status, 1, 0x6, 0x4});
+    bte_handle_events();
+
+    /* Verify that our callback has been invoked */
+    std::vector<BteHciReply> expectedReplies = { { 0 }, };
+    ASSERT_EQ(replies, expectedReplies);
 }
 
 TEST(Commands, testAcceptConnection) {

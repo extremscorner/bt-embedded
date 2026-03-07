@@ -458,19 +458,12 @@ void bte_hci_create_connection(BteHci *hci,
     _bte_hci_send_command(b);
 }
 
-static void disconnect_cb(
-    BteHci *hci, BteBuffer *buffer, void *client_cb, void *userdata)
-{
-    /* TODO: will need to propagate this to the higher layers */
-    command_complete_cb(hci, buffer, client_cb, userdata);
-}
-
 void bte_hci_disconnect(BteHci *hci, BteConnHandle handle, uint8_t reason,
                         BteHciDoneCb callback, void *userdata)
 {
-    BteBuffer *b = _bte_hci_dev_add_pending_command(
+    BteBuffer *b = _bte_hci_dev_add_pending_async_command(
         hci, HCI_DISCONN_OCF, HCI_LINK_CTRL_OGF, HCI_DISCONN_PLEN,
-        disconnect_cb, callback, userdata);
+        NULL, callback, userdata);
     if (UNLIKELY(!b)) return;
     uint8_t *data = b->data + HCI_CMD_HDR_LEN;
     write_le16(handle, data);

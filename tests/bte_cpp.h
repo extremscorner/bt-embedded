@@ -324,6 +324,11 @@ public:
                                       &Hci::Callbacks::createConnection, this);
         }
 
+        void disconnect(const BteConnHandle handle, uint8_t reason,
+                        const DoneCb &cb) {
+            bte_hci_disconnect(m_hci, handle, reason, wrap<TAG>(cb), this);
+        }
+
         using NrOfCompletedPacketsCb =
             std::function<bool(const BteHciNrOfCompletedPacketsData &data)>;
         void onNrOfCompletedPackets(const NrOfCompletedPacketsCb &cb) {
