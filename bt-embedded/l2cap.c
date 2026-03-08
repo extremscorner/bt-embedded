@@ -1366,6 +1366,10 @@ static void l2cap_disconnect_cb(BteL2cap *l2cap, uint8_t reason)
         client_cb(NULL, &reply, l2cap->userdata);
         bte_l2cap_unref(l2cap);
     }
+
+    if (l2cap->acl_disconnect_cb) {
+        l2cap->acl_disconnect_cb(l2cap, reason, l2cap->userdata);
+    }
 }
 
 static void acl_disconnected_cb(BteAcl *acl, uint8_t reason)
@@ -1737,6 +1741,12 @@ void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
     assert(l2cap != NULL);
     l2cap->disconnect_cb = callback;
     l2cap->disconnect_userdata = userdata;
+}
+
+void bte_l2cap_on_acl_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback)
+{
+    assert(l2cap != NULL);
+    l2cap->acl_disconnect_cb = callback;
 }
 
 typedef struct {

@@ -231,6 +231,8 @@ typedef void (*BteL2capDisconnectCb)(
 void bte_l2cap_disconnect(BteL2cap *l2cap);
 void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
                                void *userdata);
+void bte_l2cap_on_acl_disconnected(BteL2cap *l2cap,
+                                   BteL2capDisconnectCb callback);
 
 /* Convenience API: connect and configure in one step */
 typedef struct {
