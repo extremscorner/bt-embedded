@@ -198,12 +198,12 @@ static int usb_backend_init()
     return 0;
 }
 
-static int usb_backend_handle_events(bool wait_for_events, uint32_t timeout_ms)
+static int usb_backend_handle_events(bool wait_for_events, uint32_t timeout_us)
 {
     struct timeval tv;
     if (wait_for_events) {
-        tv.tv_sec = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        tv.tv_sec = timeout_us / 1000000;
+        tv.tv_usec = timeout_us % 1000000;
     }
     int completed = 0;
     int rc = libusb_handle_events_timeout_completed(s_context,

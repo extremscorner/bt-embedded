@@ -236,7 +236,7 @@ static void event_timer_cb(syswd_t alarm, void *cb_arg)
     LWP_SemPost(s_event_sem);
 }
 
-static int wii_handle_events(bool wait_for_events, uint32_t timeout_ms)
+static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
 {
     WiiEventQueue queue;
     u32 level;
@@ -249,8 +249,8 @@ static int wii_handle_events(bool wait_for_events, uint32_t timeout_ms)
     }
     if (num_events == 0 && wait_for_events) {
         struct timespec ts;
-        ts.tv_sec = timeout_ms / 1000000;
-        ts.tv_nsec = (timeout_ms % 1000000) * 1000;
+        ts.tv_sec = timeout_us / 1000000;
+        ts.tv_nsec = (timeout_us % 1000000) * 1000;
         bool alarm_fired = false;
         SYS_SetAlarm(s_event_timer, &ts, event_timer_cb, &alarm_fired);
         /* We disable interrupts because we don't want our timeout alarm to

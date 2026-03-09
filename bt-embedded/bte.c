@@ -3,10 +3,10 @@
 #include "backend.h"
 #include "logging.h"
 
-int bte_wait_events(uint32_t timeout_ms)
+int bte_wait_events(uint32_t timeout_us)
 {
     bool wait_for_events = true;
-    return _bte_backend.handle_events(wait_for_events, timeout_ms);
+    return _bte_backend.handle_events(wait_for_events, timeout_us);
 }
 
 int bte_handle_events(void)
