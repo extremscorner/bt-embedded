@@ -150,6 +150,21 @@ static void handle_host_control(uint16_t ocf, const uint8_t *data, uint8_t len)
 int _bte_hci_send_command(BteBuffer *buffer)
 {
     if (UNLIKELY(!buffer)) return -ENOMEM;
+#if DEBUG
+    {
+        int len = buffer->size;
+        if (len > 26) len = 26;
+
+        char hex[80];
+        int offset = 0;
+
+
+        for (int i = 0; i < len; i++) {
+            offset += sprintf(hex + offset, " %02x", buffer->data[i]);
+        }
+        BTE_DEBUG("Cmd, size %d:%s", buffer->size, hex);
+    }
+#endif
     int rc = _bte_backend.hci_send_command(buffer);
     /* The backend, if needed, will increase the reference count. But we
      * ourselves don't need this buffer anymore */
@@ -173,6 +188,21 @@ int _bte_hci_send_queued_data()
         if (rc < 0) {
             num_errors++;
         } else {
+#if DEBUG
+			{
+				int len = b->size;
+				if (len > 31) len = 31;
+
+				char buffer[100];
+				int offset = 0;
+
+
+				for (int i = 0; i < len; i++) {
+					offset += sprintf(buffer + offset, " %02x", b->data[i]);
+				}
+				BTE_DEBUG("size %d:     %s", b->size, buffer);
+			}
+#endif
             num_sent_packets++;
         }
 
@@ -267,9 +297,9 @@ int _bte_hci_dev_handle_data(BteBuffer *buf)
 #if DEBUG
     {
         int len = buf->size;
-        if (len > 22) len = 22;
+        if (len > 32) len = 32;
 
-        char buffer[80];
+        char buffer[100];
         int offset = 0;
 
 

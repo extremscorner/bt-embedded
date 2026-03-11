@@ -310,8 +310,6 @@ static s32 hci_send_command_cb(s32 result, void *userdata)
 
 static int wii_hci_send_command(BteBuffer *buf)
 {
-    BTE_DEBUG("fd = %d, buf %p, data %p, size=%d", s_bt_fd, buf,
-              buf->data, buf->size);
     if (UNLIKELY(s_bt_fd < 0)) return -EBADF;
 
     int rc;
