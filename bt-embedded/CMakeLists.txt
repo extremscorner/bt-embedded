@@ -26,6 +26,10 @@ if(OpenObex_FOUND)
     add_definitions(-DWITH_OPENOBEX)
 endif()
 
+if(WITH_DEBUG)
+    list(APPEND EXTRA_DEFINITIONS -DWITH_DEBUG)
+endif()
+
 add_library(bt-embedded STATIC
     ${DRIVERS_SOURCES}
     ${PLATFORM_SOURCES}
@@ -51,6 +55,7 @@ target_include_directories(bt-embedded
 
 target_compile_definitions(bt-embedded PRIVATE
     -DBUILDING_BT_EMBEDDED
+    ${EXTRA_DEFINITIONS}
 )
 
 target_link_options(bt-embedded PRIVATE

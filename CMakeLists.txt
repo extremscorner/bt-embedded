@@ -16,6 +16,7 @@ option(BUILD_TESTS "Build and run tests" OFF)
 option(ENABLE_COVERAGE "Enable code coverage rules" OFF)
 
 option(WITH_OPENOBEX "Build with OpenOBEX if available" ON)
+option(WITH_DEBUG "Build with debugging enabled" OFF)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
