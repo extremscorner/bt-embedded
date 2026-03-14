@@ -44,21 +44,19 @@ static inline BteSdpInt128 int128_from_64(int64_t v) {
 #else
 static inline BteSdpUint128 uint128_from_64(uint64_t v) {
     BteSdpUint128 ret;
-    uint64_t *parts = (void*)&ret;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-    parts[0] = v; parts[1] = 0;
+    ret.parts[0] = v; ret.parts[1] = 0;
 #else
-    parts[1] = v; parts[0] = 0;
+    ret.parts[1] = v; ret.parts[0] = 0;
 #endif
     return ret;
 }
 static inline BteSdpInt128 int128_from_64(int64_t v) {
     BteSdpUint128 ret;
-    int64_t *parts = (void*)&ret;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-    parts[0] = v; parts[1] = v > 0 ? 0 : -1;
+    ret.parts[0] = (uint64_t)v; ret.parts[1] = (uint64_t)(v > 0 ? 0 : -1);
 #else
-    parts[1] = v; parts[0] = v > 0 ? 0 : -1;
+    ret.parts[1] = (uint64_t)v; ret.parts[0] = (uint64_t)(v > 0 ? 0 : -1);
 #endif
     return ret;
 }

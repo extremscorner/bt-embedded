@@ -15,7 +15,7 @@ typedef __int128 BteSdpInt128;
 typedef unsigned __int128 BteSdpUint128;
 #else
 typedef struct {
-    uint8_t bytes[16];
+    uint64_t parts[2];
 } BteSdpUint128;
 typedef BteSdpUint128 BteSdpInt128;
 #endif
