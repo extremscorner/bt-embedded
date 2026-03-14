@@ -8,9 +8,9 @@ A static library for embedded devices to operate on Bluetooth devices (classic, 
 
 BtEmbedded can be built on the following platforms:
 
-- IN PROGRESS: Nintendo Wii
+- Nintendo Wii
+- Linux
 - PLANNED: Nintendo Wii's Starlet processor (cIOS)
-- PLANNED: Linux
 
 ## Architecture and design goals
 
@@ -122,7 +122,7 @@ also executed under [valgrind](https://valgrind.org/), to detect memory leaks
 and errors.
 
 
-## Compilation
+## Building and running
 
 ### Nintendo Wii
 
@@ -149,7 +149,50 @@ follows:
 2. Configure it with CMake:
   &ensp; `cmake -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Wii.cmake" -DBUILD_EXAMPLE=ON ..`
 3. `make` (or `ninja` if configured with `-G Ninja`)
+4. `libbt-embedded.a` will be generated.
+
+##### 4) Run the examples.
+
+The compiled examples will be in the `build/examples` folder. You can run them
+on the Wii console, or in the Dolphin emulator (but you need to setup
+[bluetooth passthrough](https://wiki.dolphin-emu.org/index.php?title=Bluetooth_Passthrough)
+first).
+
+
+### Linux
+
+##### 1) Dependencies
+
+To build bt-embedded, you'll need `cmake`, `libusb` and a C compiler (plus a
+C++ one if you want to build the tests). In a Debian based distribution, these
+can be installed like this:
+
+    sudo apt install cmake libusb-1.0-0-dev
+
+##### 2) (optional) Build `OpenOBEX`
+
+If you want to build the `obex.c` example to test file transfers, you need to
+build the OpenOBEX library. This is easily done by using the version at [this
+branch](https://gitlab.com/mardy/mainline/-/tree/wii), which can be compiled as
+follows:
+
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Debug ..
+    make && sudo -E make install
+
+##### 3) Build `libbt-embedded.a`
+
+1. `mkdir build && cd build`
+2. Configure it with CMake:
+  &ensp; `cmake -DBUILD_EXAMPLE=ON ..`
+3. `make` (or `ninja` if configured with `-G Ninja`)
 4. `libbt-embedded.a` will be generated
+
+##### 4) Run the examples.
+
+The compiled examples will be in the `build/examples` folder. In order to run
+them, you'll first need to setup the permissions on your bluetooth adaptor as
+explained [here](bt-embedded/backends/README-libusb.md).
 
 ## Credits
 
