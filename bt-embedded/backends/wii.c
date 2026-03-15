@@ -8,13 +8,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <ogc/machine/processor.h>
+#include <ogc/message.h>
 #include <ogc/system.h>
+#include <ogc/timesupp.h>
 #include <ogc/usb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <tuxedo/mailbox.h>
-#include <tuxedo/tick.h>
 
 #define USB_VENDOR_NINTENDO 0x057E
 #define USB_PRODUCT_WII_BT  0x0305
@@ -67,12 +67,7 @@ static bool s_intr_request_failed = false;
 static bool s_bulk_request_failed = false;
 
 static int s_bt_fd = -1;
-static KMailbox s_event_mailbox;
-static KMailbox *s_event_sem = &s_event_mailbox;
-static KTickTask s_event_timer;
-/* We need one slot for the timeout message, and another to tell whether the
- * queue has any events; but let's add some more slots just to be safe. */
-static uptr s_event_sem_slots[4];
+static mqbox_t s_event_mailbox = MQ_BOX_NULL;
 
 static int read_intr();
 static int read_bulk();
@@ -96,9 +91,8 @@ static void *alloc_usb_buffers(int size)
 {
     /* For some reason we need to allocate the buffers for the USB incoming
      * data in MEM2, otherwise some bytes in the payload get corrupted */
-    void *ptr = (void *)ROUNDDOWN32(((u32)SYS_GetArena2Hi() - size));
-    if ((u32)ptr < (u32)SYS_GetArena2Lo()) return NULL;
-    SYS_SetArena2Hi(ptr);
+    void *ptr = SYS_AllocArenaMem2Hi(size, BTE_BUFFER_ALIGNMENT_SIZE);
+    if (UNLIKELY(!ptr)) return NULL;
     memset(ptr, 0, size);
     return ptr;
 }
@@ -143,7 +137,7 @@ static inline void queue_event(WiiEventType type, BteBuffer *buffer)
     WiiEvent *e = &s_wii_event_queue.events[s_wii_event_queue.current_index++];
     e->type = type;
     e->buffer = buffer;
-    KMailboxTrySend(s_event_sem, (uptr)&s_wii_event_queue);
+    MQ_Send(s_event_mailbox, (mqmsg_t)&s_wii_event_queue, MQ_MSG_NOBLOCK);
 }
 
 static s32 read_intr_cb(s32 result, void *userdata)
@@ -220,7 +214,7 @@ static int wii_init()
     BTE_DEBUG("USB_OpenDevice returned %d", rc);
     if (rc != USB_OK) return -1;
 
-    KMailboxPrepare(&s_event_mailbox, s_event_sem_slots, ARRAY_SIZE(s_event_sem_slots));
+    MQ_Init(&s_event_mailbox, 1);
 
     s_wii_buffer_intr =
         alloc_usb_buffers(sizeof(WiiBufferIntr) * WII_BUFFER_INTR_COUNT);
@@ -266,36 +260,22 @@ static int process_event_queue()
     return queue.current_index;
 }
 
-static void event_timer_cb(KTickTask *timer)
-{
-    KMailboxTrySend(s_event_sem, (uptr)timer);
-}
-
 static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
 {
-    u32 level;
-
-    bool has_events = 0;
-    uptr message;
-    while (KMailboxTryRecv(s_event_sem, &message)) {
+    bool has_events = false;
+    mqmsg_t message;
+    while (MQ_Receive(s_event_mailbox, &message, MQ_MSG_NOBLOCK)) {
         has_events = true;
     }
     if (!has_events && wait_for_events) {
-        u64 timeout_ticks = PPCUsToTicks(timeout_us);
-        KTickTaskStart(&s_event_timer, event_timer_cb, timeout_ticks, 0);
-        /* We disable interrupts because we don't want our timeout alarm to
-         * trigger (and therefore increment the semaphore) between the time
-         * that KMailboxRecv returns and the time we cancel it. */
-        _CPU_ISR_Disable(level);
-        message = KMailboxRecv(s_event_sem);
-        if (message == (uptr)&s_event_timer) {
-            _CPU_ISR_Restore(level);
+        struct timespec ts;
+        ts.tv_sec = timeout_us / TB_USPERSEC;
+        ts.tv_nsec = (timeout_us % TB_USPERSEC) * TB_NSPERUS;
+        if (!MQ_TimedReceive(s_event_mailbox, &message, &ts)) {
             return 0;
         } else {
-            KTickTaskStop(&s_event_timer);
             has_events = true;
         }
-        _CPU_ISR_Restore(level);
     }
 
     return process_event_queue();
@@ -370,9 +350,9 @@ const BteBackend _bte_backend = {
     .deinit = wii_deinit,
 };
 
-void bte_backend_wii_set_mailbox(KMailbox *mailbox)
+void bte_backend_wii_set_mailbox(mqbox_t mailbox)
 {
-    s_event_sem = mailbox;
+    s_event_mailbox = mailbox;
 }
 
 int bte_backend_wii_process_events()
