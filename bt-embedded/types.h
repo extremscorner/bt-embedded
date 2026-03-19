@@ -9,35 +9,89 @@
 extern "C" {
 #endif
 
+/**
+ * @defgroup types Common types
+ * @brief Types used throughout the bt-embedded API
+ * @{
+ */
+
 /* Common **public** types used by the library and its clients */
 
 #define BTE_PACKED __attribute__((packed))
 
 typedef struct bte_buffer_t BteBuffer;
 typedef struct bte_client_t BteClient;
+/**
+ * @brief Handle to the HCI interface
+ *
+ * An opaque handle to the Host Controller Interface (HCI).
+ *
+ * @sa bte_hci_get()
+ */
 typedef struct bte_hci_t BteHci;
 typedef struct bte_l2cap_t BteL2cap;
 
+/**
+ * @brief Address of a bluetooth device
+ */
 typedef struct {
+    /** Bytes forming the address */
     uint8_t bytes[6];
 } BteBdAddr;
 
+/**
+ * @brief Class of device
+ *
+ * @sa bte_cod_get_service_class(), bte_cod_get_major_dev_class(),
+ *     bte_cod_get_minor_dev_class(), bte_cod_compose()
+ */
 typedef struct {
     uint8_t bytes[3];
 } BteClassOfDevice;
 
+/**
+ * @brief Extract the major service class bitfield
+ *
+ * @param cod The class of device
+ * @return The bitfield for the major service classes
+ *
+ * @sa BteCodServiceClassG
+ */
 static inline uint16_t bte_cod_get_service_class(BteClassOfDevice cod) {
     return (cod.bytes[2] << 3) | (cod.bytes[1] >> 5);
 }
 
+/**
+ * @brief Extract the major device class
+ *
+ * @param cod The class of device
+ * @return The major device class
+ *
+ * @sa BteCodMajorDevClassG
+ */
 static inline uint8_t bte_cod_get_major_dev_class(BteClassOfDevice cod) {
     return cod.bytes[1] & 0x1f;
 }
 
+/**
+ * @brief Extract the minor device class
+ *
+ * @param cod The class of device
+ * @return The minor device class
+ */
 static inline uint8_t bte_cod_get_minor_dev_class(BteClassOfDevice cod) {
     return cod.bytes[0] >> 2;
 }
 
+/**
+ * @brief Construct a BteClassOfDevice from its components
+ *
+ * @param service_class Bitmask of service classes (@ref BteCodServiceClassG)
+ * @param major_dev_class Major device class (@ref BteCodMajorDevClassG)
+ * @param minor_dev_class Minor device class
+ *
+ * @return The resulting class of device
+ */
 static inline BteClassOfDevice bte_cod_compose(
     uint16_t service_class, uint8_t major_dev_class, uint8_t minor_dev_class) {
     BteClassOfDevice cod = {{
@@ -48,6 +102,8 @@ static inline BteClassOfDevice bte_cod_compose(
     return cod;
 }
 
+/** @defgroup BteCodServiceClassG Major service classes
+ * @{ */
 /** Limited Discoverable Mode */
 #define BTE_COD_SERVICE_CLASS_LDM       (uint16_t)(1 << 0)
 #define BTE_COD_SERVICE_CLASS_LE_AUDIO  (uint16_t)(1 << 1) /**< LE audio */
@@ -67,7 +123,10 @@ static inline BteClassOfDevice bte_cod_compose(
 #define BTE_COD_SERVICE_CLASS_TELEPHONY (uint16_t)(1 << 9)
 /** Information (WEB-server, WAP-server, ...) */
 #define BTE_COD_SERVICE_CLASS_INFO      (uint16_t)(1 << 10)
+/** @} */
 
+/** @defgroup BteCodMajorDevClassG Major device classes
+ * @{ */
 /** Miscellaneous */
 #define BTE_COD_MAJOR_DEV_CLASS_MISC     (uint8_t)0x0
 /** Computer (desktop, notebook, PDA, organizer, ...) */
@@ -90,32 +149,102 @@ static inline BteClassOfDevice bte_cod_compose(
 #define BTE_COD_MAJOR_DEV_CLASS_HEALTH   (uint8_t)0x9
 /** Uncategorized (device code not specified) */
 #define BTE_COD_MAJOR_DEV_CLASS_UNCAT    (uint8_t)0x1f
+/** @} */
 
+/**
+ * @brief Link key
+ */
 typedef struct {
+    /** Bytes forming the link key */
     uint8_t bytes[16];
 } BteLinkKey;
 
+/**
+ * @brief Device Local Address Part (LAP)
+ *
+ * @sa BteLapG
+ */
 typedef uint32_t BteLap;
+/** @defgroup BteLapG BteLap well-defined values
+ * @{ */
+#define BTE_LAP_GIAC (BteLap)0x009E8B33 /**< GIAC */
+#define BTE_LAP_LIAC (BteLap)0x009E8B00 /**< LIAC */
+/** @} */
 
+/**
+ * @brief Bluetooth packet type
+ *
+ * @sa BtePacketTypeG
+ */
 typedef uint16_t BtePacketType;
 
-#define BTE_PACKET_TYPE_DM1 (BtePacketType)0x0008
-#define BTE_PACKET_TYPE_DH1 (BtePacketType)0x0010
-#define BTE_PACKET_TYPE_DM3 (BtePacketType)0x0400
-#define BTE_PACKET_TYPE_DH3 (BtePacketType)0x0800
-#define BTE_PACKET_TYPE_DH5 (BtePacketType)0x4000
-#define BTE_PACKET_TYPE_DM5 (BtePacketType)0x8000
+/** @defgroup BtePacketTypeG Defined packet types
+ * @{ */
+#define BTE_PACKET_TYPE_DM1 (BtePacketType)0x0008 /**< DM1 */
+#define BTE_PACKET_TYPE_DH1 (BtePacketType)0x0010 /**< DH1 */
+#define BTE_PACKET_TYPE_DM3 (BtePacketType)0x0400 /**< DM3 */
+#define BTE_PACKET_TYPE_DH3 (BtePacketType)0x0800 /**< DH3 */
+#define BTE_PACKET_TYPE_DH5 (BtePacketType)0x4000 /**< DH5 */
+#define BTE_PACKET_TYPE_DM5 (BtePacketType)0x8000 /**< DM5 */
+/** @} */
 
+/**
+ * @brief Connection handle
+ *
+ * A handle to an ACL or SCO connection.
+ *
+ * @sa bte_hci_create_connection(), bte_hci_on_connection_request()
+ */
 typedef uint16_t BteConnHandle;
 
 /* The connection handle is 12 bits, so this value is certainly invalid */
 #define BTE_CONN_HANDLE_INVALID (BteConnHandle)0xffff
 
+/**
+ * @brief Connection type
+ *
+ * Describes the type of a connection
+ *
+ * @sa BteLinkTypeG, bte_hci_create_connection(), bte_hci_on_connection_request()
+ */
 typedef uint8_t BteLinkType;
 
-#define BTE_LINK_TYPE_SCO  (BteLinkType)0
-#define BTE_LINK_TYPE_ACL  (BteLinkType)1
-#define BTE_LINK_TYPE_ESCO (BteLinkType)2
+/** @defgroup BteLinkTypeG Defined connection types
+ * @{ */
+#define BTE_LINK_TYPE_SCO  (BteLinkType)0 /**< SCO */
+#define BTE_LINK_TYPE_ACL  (BteLinkType)1 /**< ACL */
+#define BTE_LINK_TYPE_ESCO (BteLinkType)2 /**< eSCO */
+/** @} */
+
+/**
+ * @brief Encryption mode
+ *
+ * @sa BteEncryptionModeG, BteHciCreateConnectionReply, BteHciAcceptConnectionReply
+ */
+typedef uint8_t BteEncryptionMode;
+
+/** @defgroup BteEncryptionModeG Encryption modes
+ * @{ */
+#define BTE_ENCRYPTION_MODE_NONE (BteEncryptionMode)0 /**< Encryption disabled */
+#define BTE_ENCRYPTION_MODE_ALL  (BteEncryptionMode)1 /**< Encryption enabled */
+/** @} */
+
+/**
+ * @brief Device role
+ *
+ * @sa BteRoleG, bte_hci_accept_connection()
+ */
+typedef uint8_t BteRole;
+
+/** @defgroup BteRoleG Device roles
+ * @{ */
+#define BTE_HCI_ROLE_MASTER (BteRole)0 /**< Master */
+#define BTE_HCI_ROLE_SLAVE  (BteRole)1 /**< Slave */
+/** @} */
+
+/**
+ * @}
+ */
 
 #ifdef __cplusplus
 }
