@@ -20,6 +20,18 @@ static void initialization_done(BteClient *client)
     _bte_hci_dev_set_status(BTE_HCI_INIT_STATUS_INITIALIZED);
 }
 
+static void read_local_features_cb(BteHci *hci,
+                                   const BteHciReadLocalFeaturesReply *reply,
+                                   void *userdata)
+{
+    BTE_DEBUG("");
+    STOP_ON_FAILURE(hci, reply);
+
+    /* hci_dev itself saves the result */
+
+    initialization_done(bte_hci_get_client(hci));
+}
+
 static void on_buffer_size_done(BteHci *hci,
                                 const BteHciReadBufferSizeReply *reply,
                                 void *userdata)
@@ -35,7 +47,7 @@ static void on_buffer_size_done(BteHci *hci,
     dev->sco_max_packets = reply->sco_max_packets;
     dev->info_flags |= BTE_HCI_INFO_GOT_BUFFER_SIZE;
 
-    initialization_done(bte_hci_get_client(hci));
+    bte_hci_read_local_features(hci, read_local_features_cb, userdata);
 }
 
 static void on_reset_done(BteHci *hci, const BteHciReply *reply,
