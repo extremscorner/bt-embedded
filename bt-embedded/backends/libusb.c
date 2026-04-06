@@ -1,3 +1,5 @@
+#include "libusb.h"
+
 #include "backend.h"
 #include "internals.h"
 #include "logging.h"
@@ -5,7 +7,6 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <libusb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,7 @@ static const struct {
     { 0, 0 },
 };
 
+static bool s_external_context = false;
 static libusb_context *s_context = NULL;
 static libusb_device_handle *s_handle = NULL;
 
@@ -139,8 +141,12 @@ static bool is_bluetooth_adaptor(const struct libusb_device_descriptor *desc)
 
 static int usb_backend_init()
 {
-    int rc = libusb_init_context(&s_context, NULL, 0);
-    if (UNLIKELY(rc != 0)) return -1;
+    int rc;
+
+    if (!s_external_context) {
+        rc = libusb_init_context(&s_context, NULL, 0);
+        if (UNLIKELY(rc != 0)) return -1;
+    }
 
     libusb_device **devices;
     int n_devices = libusb_get_device_list(s_context, &devices);
@@ -279,7 +285,9 @@ static int usb_backend_deinit()
 {
     BTE_DEBUG("");
     libusb_close(s_handle);
-    libusb_exit(s_context);
+    if (!s_external_context) {
+        libusb_exit(s_context);
+    }
     return 0;
 }
 
@@ -293,3 +301,9 @@ const BteBackend _bte_backend = {
 
     .deinit = usb_backend_deinit,
 };
+
+void bte_backend_libusb_set_context(libusb_context *context)
+{
+    s_external_context = true;
+    s_context = context;
+}
