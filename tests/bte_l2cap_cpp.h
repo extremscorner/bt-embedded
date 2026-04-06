@@ -328,8 +328,7 @@ public:
     void onDisconnected(const DisconnectedCb &cb)
     {
         m_onDisconnected = cb;
-        bte_l2cap_on_disconnected(m_l2cap, &L2cap::Callbacks::onDisconnected,
-                                  this);
+        bte_l2cap_on_disconnected(m_l2cap, &L2cap::Callbacks::onDisconnected);
     }
 
     using NewConfiguredCb = std::function<void(

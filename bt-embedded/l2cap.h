@@ -229,8 +229,7 @@ bool bte_l2cap_query_info(BteL2cap *l2cap, BteL2capInfoType type,
 typedef void (*BteL2capDisconnectCb)(
     BteL2cap *l2cap, uint8_t reason, void *userdata);
 void bte_l2cap_disconnect(BteL2cap *l2cap);
-void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback,
-                               void *userdata);
+void bte_l2cap_on_disconnected(BteL2cap *l2cap, BteL2capDisconnectCb callback);
 void bte_l2cap_on_acl_disconnected(BteL2cap *l2cap,
                                    BteL2capDisconnectCb callback);
 

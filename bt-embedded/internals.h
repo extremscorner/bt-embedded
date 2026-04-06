@@ -101,7 +101,6 @@ struct bte_l2cap_t {
     void *echo_userdata;
 
     BteL2capDisconnectCb disconnect_cb;
-    void *disconnect_userdata;
     BteL2capDisconnectCb acl_disconnect_cb;
 
     /* Storage for temporary data, only valid since issuing an asynchronous
