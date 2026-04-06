@@ -150,7 +150,7 @@ static void handle_host_control(uint16_t ocf, const uint8_t *data, uint8_t len)
 int _bte_hci_send_command(BteBuffer *buffer)
 {
     if (UNLIKELY(!buffer)) return -ENOMEM;
-#if DEBUG
+#ifdef WITH_DEBUG
     {
         int len = buffer->size;
         if (len > 26) len = 26;
@@ -188,7 +188,7 @@ int _bte_hci_send_queued_data()
         if (rc < 0) {
             num_errors++;
         } else {
-#if DEBUG
+#ifdef WITH_DEBUG
 			{
 				int len = b->size;
 				if (len > 31) len = 31;
@@ -236,7 +236,7 @@ void _bte_hci_dev_set_buffer_size(uint16_t acl_mtu, uint16_t acl_max_packets,
 
 int _bte_hci_dev_handle_event(BteBuffer *buf)
 {
-#if DEBUG
+#ifdef WITH_DEBUG
     {
         int len = buf->size;
         if (len > 26) len = 26;
@@ -294,7 +294,7 @@ int _bte_hci_dev_handle_data(BteBuffer *buf)
 {
     BteHciDev *dev = &_bte_hci_dev;
 
-#if DEBUG
+#ifdef WITH_DEBUG
     {
         int len = buf->size;
         if (len > 32) len = 32;
