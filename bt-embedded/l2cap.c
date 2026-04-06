@@ -1365,9 +1365,7 @@ static void l2cap_disconnect_cb(BteL2cap *l2cap, uint8_t reason)
         BteL2capConnectCb client_cb = l2cap->cmd_data.connect.client_cb;
         client_cb(NULL, &reply, l2cap->userdata);
         bte_l2cap_unref(l2cap);
-    }
-
-    if (l2cap->acl_disconnect_cb) {
+    } else if (l2cap->acl_disconnect_cb) {
         l2cap->acl_disconnect_cb(l2cap, reason, l2cap->userdata);
     }
 }
