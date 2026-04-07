@@ -1,3 +1,5 @@
+#include "wii.h"
+
 #include "backend.h"
 #include "internals.h"
 #include "logging.h"
@@ -65,7 +67,8 @@ static bool s_intr_request_failed = false;
 static bool s_bulk_request_failed = false;
 
 static int s_bt_fd = -1;
-static KMailbox s_event_sem;
+static KMailbox s_event_mailbox;
+static KMailbox *s_event_sem = &s_event_mailbox;
 static KTickTask s_event_timer;
 /* We need one slot for the timeout message, and another to tell whether the
  * queue has any events; but let's add some more slots just to be safe. */
@@ -140,7 +143,7 @@ static inline void queue_event(WiiEventType type, BteBuffer *buffer)
     WiiEvent *e = &s_wii_event_queue.events[s_wii_event_queue.current_index++];
     e->type = type;
     e->buffer = buffer;
-    KMailboxTrySend(&s_event_sem, (uptr)&s_wii_event_queue);
+    KMailboxTrySend(s_event_sem, (uptr)&s_wii_event_queue);
 }
 
 static s32 read_intr_cb(s32 result, void *userdata)
@@ -217,7 +220,7 @@ static int wii_init()
     BTE_DEBUG("USB_OpenDevice returned %d", rc);
     if (rc != USB_OK) return -1;
 
-    KMailboxPrepare(&s_event_sem, s_event_sem_slots, ARRAY_SIZE(s_event_sem_slots));
+    KMailboxPrepare(&s_event_mailbox, s_event_sem_slots, ARRAY_SIZE(s_event_sem_slots));
 
     s_wii_buffer_intr =
         alloc_usb_buffers(sizeof(WiiBufferIntr) * WII_BUFFER_INTR_COUNT);
@@ -232,38 +235,10 @@ static int wii_init()
     return 0;
 }
 
-static void event_timer_cb(KTickTask *timer)
-{
-    KMailboxTrySend(&s_event_sem, (uptr)timer);
-}
-
-static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
+static int process_event_queue()
 {
     WiiEventQueue queue;
     u32 level;
-
-    bool has_events = 0;
-    uptr message;
-    while (KMailboxTryRecv(&s_event_sem, &message)) {
-        has_events = true;
-    }
-    if (!has_events && wait_for_events) {
-        u64 timeout_ticks = PPCUsToTicks(timeout_us);
-        KTickTaskStart(&s_event_timer, event_timer_cb, timeout_ticks, 0);
-        /* We disable interrupts because we don't want our timeout alarm to
-         * trigger (and therefore increment the semaphore) between the time
-         * that KMailboxRecv returns and the time we cancel it. */
-        _CPU_ISR_Disable(level);
-        message = KMailboxRecv(&s_event_sem);
-        if (message == (uptr)&s_event_timer) {
-            _CPU_ISR_Restore(level);
-            return 0;
-        } else {
-            KTickTaskStop(&s_event_timer);
-            has_events = true;
-        }
-        _CPU_ISR_Restore(level);
-    }
 
     _CPU_ISR_Disable(level);
     /* Create a copy of the queue to ensure it doesn't get modified while we
@@ -289,6 +264,41 @@ static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
     }
 
     return queue.current_index;
+}
+
+static void event_timer_cb(KTickTask *timer)
+{
+    KMailboxTrySend(s_event_sem, (uptr)timer);
+}
+
+static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
+{
+    u32 level;
+
+    bool has_events = 0;
+    uptr message;
+    while (KMailboxTryRecv(s_event_sem, &message)) {
+        has_events = true;
+    }
+    if (!has_events && wait_for_events) {
+        u64 timeout_ticks = PPCUsToTicks(timeout_us);
+        KTickTaskStart(&s_event_timer, event_timer_cb, timeout_ticks, 0);
+        /* We disable interrupts because we don't want our timeout alarm to
+         * trigger (and therefore increment the semaphore) between the time
+         * that KMailboxRecv returns and the time we cancel it. */
+        _CPU_ISR_Disable(level);
+        message = KMailboxRecv(s_event_sem);
+        if (message == (uptr)&s_event_timer) {
+            _CPU_ISR_Restore(level);
+            return 0;
+        } else {
+            KTickTaskStop(&s_event_timer);
+            has_events = true;
+        }
+        _CPU_ISR_Restore(level);
+    }
+
+    return process_event_queue();
 }
 
 static s32 hci_send_command_cb(s32 result, void *userdata)
@@ -359,3 +369,13 @@ const BteBackend _bte_backend = {
 
     .deinit = wii_deinit,
 };
+
+void bte_backend_wii_set_mailbox(KMailbox *mailbox)
+{
+    s_event_sem = mailbox;
+}
+
+int bte_backend_wii_process_events()
+{
+    return process_event_queue();
+}
