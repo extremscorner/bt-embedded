@@ -6,12 +6,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <ogc/machine/processor.h>
-#include <ogc/semaphore.h>
 #include <ogc/system.h>
 #include <ogc/usb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tuxedo/mailbox.h>
+#include <tuxedo/tick.h>
 
 #define USB_VENDOR_NINTENDO 0x057E
 #define USB_PRODUCT_WII_BT  0x0305
@@ -64,8 +65,11 @@ static bool s_intr_request_failed = false;
 static bool s_bulk_request_failed = false;
 
 static int s_bt_fd = -1;
-static sem_t s_event_sem = LWP_SEM_NULL;
-static syswd_t s_event_timer = SYS_WD_NULL;
+static KMailbox s_event_sem;
+static KTickTask s_event_timer;
+/* We need one slot for the timeout message, and another to tell whether the
+ * queue has any events; but let's add some more slots just to be safe. */
+static uptr s_event_sem_slots[4];
 
 static int read_intr();
 static int read_bulk();
@@ -136,7 +140,7 @@ static inline void queue_event(WiiEventType type, BteBuffer *buffer)
     WiiEvent *e = &s_wii_event_queue.events[s_wii_event_queue.current_index++];
     e->type = type;
     e->buffer = buffer;
-    LWP_SemPost(s_event_sem);
+    KMailboxTrySend(&s_event_sem, (uptr)&s_wii_event_queue);
 }
 
 static s32 read_intr_cb(s32 result, void *userdata)
@@ -213,8 +217,7 @@ static int wii_init()
     BTE_DEBUG("USB_OpenDevice returned %d", rc);
     if (rc != USB_OK) return -1;
 
-    LWP_SemInit(&s_event_sem, 0, WII_MAX_EVENTS);
-    SYS_CreateAlarm(&s_event_timer);
+    KMailboxPrepare(&s_event_sem, s_event_sem_slots, ARRAY_SIZE(s_event_sem_slots));
 
     s_wii_buffer_intr =
         alloc_usb_buffers(sizeof(WiiBufferIntr) * WII_BUFFER_INTR_COUNT);
@@ -229,11 +232,9 @@ static int wii_init()
     return 0;
 }
 
-static void event_timer_cb(syswd_t alarm, void *cb_arg)
+static void event_timer_cb(KTickTask *timer)
 {
-    bool *alarm_fired = cb_arg;
-    *alarm_fired = true;
-    LWP_SemPost(s_event_sem);
+    KMailboxTrySend(&s_event_sem, (uptr)timer);
 }
 
 static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
@@ -241,29 +242,25 @@ static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
     WiiEventQueue queue;
     u32 level;
 
-    uint32_t num_events = 0;
-    LWP_SemGetValue(s_event_sem, &num_events);
-
-    for (int i = 0; i < num_events; i++) {
-        LWP_SemWait(s_event_sem);
+    bool has_events = 0;
+    uptr message;
+    while (KMailboxTryRecv(&s_event_sem, &message)) {
+        has_events = true;
     }
-    if (num_events == 0 && wait_for_events) {
-        struct timespec ts;
-        ts.tv_sec = timeout_us / 1000000;
-        ts.tv_nsec = (timeout_us % 1000000) * 1000;
-        bool alarm_fired = false;
-        SYS_SetAlarm(s_event_timer, &ts, event_timer_cb, &alarm_fired);
+    if (!has_events && wait_for_events) {
+        u64 timeout_ticks = PPCUsToTicks(timeout_us);
+        KTickTaskStart(&s_event_timer, event_timer_cb, timeout_ticks, 0);
         /* We disable interrupts because we don't want our timeout alarm to
          * trigger (and therefore increment the semaphore) between the time
-         * that LWP_SemWait returns and the time we cancel it. */
+         * that KMailboxRecv returns and the time we cancel it. */
         _CPU_ISR_Disable(level);
-        LWP_SemWait(s_event_sem);
-        if (alarm_fired) {
+        message = KMailboxRecv(&s_event_sem);
+        if (message == (uptr)&s_event_timer) {
             _CPU_ISR_Restore(level);
             return 0;
         } else {
-            SYS_CancelAlarm(s_event_timer);
-            num_events = 1;
+            KTickTaskStop(&s_event_timer);
+            has_events = true;
         }
         _CPU_ISR_Restore(level);
     }
@@ -272,14 +269,7 @@ static int wii_handle_events(bool wait_for_events, uint32_t timeout_us)
     /* Create a copy of the queue to ensure it doesn't get modified while we
      * process it */
     memcpy(&queue, &s_wii_event_queue, sizeof(queue));
-    queue.current_index = num_events;
-    int unprocessed = s_wii_event_queue.current_index - num_events;
-    if (unprocessed > 0) {
-        memmove(&s_wii_event_queue.events[0],
-                &s_wii_event_queue.events[num_events],
-                sizeof(s_wii_event_queue.events[0]) * unprocessed);
-    }
-    s_wii_event_queue.current_index = unprocessed;
+    s_wii_event_queue.current_index = 0;
     s_wii_event_queue.missed_events = 0;
     _CPU_ISR_Restore(level);
 
