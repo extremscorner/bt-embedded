@@ -19,13 +19,15 @@ structure of the code is as follows:
 
 ```
 bt-embedded/
-    backends/   # Platform backends
-        wii.c   # Platform backend for the Nintendo Wii PPC processor
-    backend.h   # Interface for platform backends
+    backends/    # Platform backends
+        libusb.c # - Backend for libusb
+        wii.c    # - Backend for the Nintendo Wii PPC processor
+    backend.h    # Interface for platform backends
     
-    drivers/    # Drivers for the Bluetooth controller
-        wii.c   # Driver for the Wii's Bt controller
-    drivers.h   # Interface for the Bluetooth drivers
+    drivers/      # Drivers for the Bluetooth controller
+        generic.c # - Generic HCI driver
+        wii.c     # - Driver for the Wii's Bt controller
+    drivers.h     # Interface for the Bluetooth drivers
 
     # BtEmbedded source code, common for all targets:
     hci.c
