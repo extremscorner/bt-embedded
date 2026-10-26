@@ -1080,13 +1080,6 @@ void bte_hci_on_mode_change(BteHci *hci, BteConnHandle conn_handle,
                                        mode_change_event_cb);
 }
 
-static bool client_handle_qos_setup_complete(BteHci *hci, void *cb_data)
-{
-    const BteHciQosSetupCompleteData *event = cb_data;
-    return hci->qos_setup_complete_cb &&
-        hci->qos_setup_complete_cb(hci, event, hci_userdata(hci));
-}
-
 static void qos_setup_complete_event_cb(BteBuffer *buffer)
 {
     if (UNLIKELY(buffer->size < HCI_QOS_SETUP_COMPLETE_LEN)) return;
